@@ -34,7 +34,30 @@
 #include <machine/bootinfo.h>
 #include <machine/cpu.h>
 #include <machine/romcall.h>
+#include <machine/apfifo.h>
 
+static int tap = 0;
+#define LOGRESULT(x) {               \
+	tap++;                           \
+	if (!x)                          \
+	{                                \
+		printf("not ");              \
+	}                                \
+	printf("ok %d - %s\n", tap, #x); \
+}
+
+void apfifo_test(void);
+void dump_apfifo_channel(struct fifo_channel *fifo_ch);
+int apfifo_word_access_test(struct fifo_channel *fifo_ch);
+int apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr);
+int apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr);
+int apfifo_ooo_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr);
+int apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr);
+int apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size);
+int apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size);
+int apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr, uint32_t size);
+int apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr, uint32_t size);
+int apfifo_reconfigure_test(struct fifo_channel *fifo_ch);
 void boot(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 
 void mips1_flushicache(void *, int);
@@ -53,7 +76,7 @@ char *kernels[] = { "/netbsd", "/netbsd.gz", NULL };
 #ifdef BOOT_DEBUG
 # define DPRINTF printf
 #else
-# define DPRINTF while (0) printf
+# define DPRINTF printf
 #endif
 
 void
@@ -72,6 +95,7 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 	struct btinfo_bootpath bi_bpath;
 	struct btinfo_systype bi_sys;
 	int loadflag;
+	volatile uint32_t *temp;
 
 	/* Clear BSS. */
 	memset(_edata, 0, _end - _edata);
@@ -112,6 +136,26 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 		DPRINTF("bootdev = %s\n", (char *)a1);
 		DPRINTF("bootname = %s\n", netbsd);
 		DPRINTF("maxmem = 0x%x\n", maxmem);
+
+		temp = (uint32_t*)0xb4c00004;
+		DPRINTF("bbga_addrs = 0x%x\n", *temp);
+
+		temp = (uint32_t*)0xbf3e0000;
+		DPRINTF("Security status = 0x%x\n", *temp);
+
+		temp = (uint32_t *)0xbf520000;
+		DPRINTF("PARK3 mode: 0x%x\n", *temp);
+
+		temp = (uint32_t *)0xbf520004;
+		DPRINTF("PARK3 revision: 0x%x\n", *temp);
+
+		temp = (uint32_t *)0xbf52000c;
+		DPRINTF("I/O Clock Freq: 0x%x\n", *temp);
+
+		temp = (uint32_t *)0xbf520010;
+		DPRINTF("B-bus Clock Freq: 0x%x\n", *temp);
+
+		apfifo_test();
 
 		/* XXX use "sonic()" instead of "tftp()" */
 		if (strncmp(bootdev, "tftp", 4) == 0)
@@ -215,6 +259,706 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 
 	printf("\n");
 	(*entry)(a0, a1, a2, a3, a4, a5);
+}
+
+void
+dump_apfifo_channel(struct fifo_channel *fifo_ch)
+{
+	DPRINTF("FIFO configuration dump start ---\n");
+	DPRINTF("fifo_mask = 0x%x\n", fifo_ch->size);
+	DPRINTF("fifo_addr = 0x%x\n", fifo_ch->address);
+	DPRINTF("fifo_intc = 0x%x\n", fifo_ch->intclr);
+	DPRINTF("fifo_dmam = 0x%x\n", fifo_ch->dma_mode);
+	DPRINTF("fifo_wait = 0x%x\n", fifo_ch->unknown0);
+	DPRINTF("fifo_drqc = 0x%x\n", fifo_ch->unknown1);
+	DPRINTF("fifo_ictl = 0x%x\n", fifo_ch->intctrl);
+	DPRINTF("fifo_ista = 0x%x\n", fifo_ch->intstat);
+	DPRINTF("fifo_wmrk = 0x%x\n", fifo_ch->unknown2);
+	DPRINTF("fifo_dcnt = 0x%x\n", fifo_ch->unknown3);
+	DPRINTF("fifo_dptr = 0x%x\n", fifo_ch->dma_pointer);
+	DPRINTF("fifo_cptr = 0x%x\n", fifo_ch->register_pointer);
+	DPRINTF("fifo_vcnt = 0x%x\n", fifo_ch->count);
+	DPRINTF("fifo_data = 0x%x\n", fifo_ch->data);
+	DPRINTF("FIFO configuration dump end ---\n");
+}
+
+int
+apfifo_word_access_test(struct fifo_channel *fifo_ch)
+{
+	int ok = 1;
+	int i = 0;
+	uint32_t vcnt;
+	uint32_t buf;
+	uint32_t cptr;
+	uint32_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+	// Set pointer to beginning of the FIFO block
+	fifo_ch->register_pointer = 0;
+	vcnt = fifo_ch->count;
+
+	// Read in the values we should get from the beginning of the fifo by reading from memory directly
+	for (i = 0; i < 8; i++)
+	{
+		cptr = fifo_ch->register_pointer;
+		data[i] = APFIFO0_BUF_32(i);
+		buf = fifo_ch->data;
+		DPRINTF(" data[%d] = 0x%x fifo_data = 0x%x %s\n", i, data[i], buf, buf == data[i] ? "PASS" : "FAIL");
+		if(buf != data[i])
+		{
+			ok = 0;
+		}
+
+		if (fifo_ch->count != vcnt - 4)
+		{
+			DPRINTF(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 4, fifo_ch->count);
+			ok = 0;
+		}
+		vcnt -= 4;
+
+		if (fifo_ch->register_pointer != (cptr + 4))
+		{
+			DPRINTF(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 4, fifo_ch->register_pointer);
+			ok = 0;
+		}
+	}
+
+	return ok;
+}
+
+int
+apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr)
+{
+	int ok = 1;
+	int i = 0;
+	uint32_t cptr;
+	uint32_t vcnt;
+	uint16_t buf;
+	uint16_t data[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+	// Set pointer to beginning of the FIFO block
+	fifo_ch->register_pointer = 0;
+	vcnt = fifo_ch->count;
+
+	// Read in the values we should get from the beginning of the fifo by reading from memory directly
+	for (i = 0; i < 16; i++)
+	{
+		cptr = fifo_ch->register_pointer;
+		data[i] = APFIFO0_BUF_16(i);
+		buf = *(data_ptr + (i % 2));
+		DPRINTF(" data[%d] = 0x%x fifo_data = 0x%x %s\n", i, data[i], buf, buf == data[i] ? "PASS" : "FAIL");
+		if(buf != data[i])
+		{
+			ok = 0;
+		}
+
+		if (fifo_ch->count != vcnt - 2)
+		{
+			DPRINTF(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 2, fifo_ch->count);
+			ok = 0;
+		}
+		vcnt -= 2;
+
+		if (fifo_ch->register_pointer != (cptr + 2))
+		{
+			DPRINTF(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 2, fifo_ch->register_pointer);
+			ok = 0;
+		}
+	}
+
+	return ok;
+}
+
+int
+apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+{
+	int ok = 1;
+	int i = 0;
+	uint32_t cptr;
+	uint32_t vcnt;
+	uint8_t buf;
+	uint8_t data[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+	// Set pointer to beginning of the FIFO block
+	fifo_ch->register_pointer = 0;
+	vcnt = fifo_ch->count;
+
+	// Read in the values we should get from the beginning of the fifo by reading from memory directly
+	for (i = 0; i < 32; i++)
+	{
+		cptr = fifo_ch->register_pointer;
+		data[i] = APFIFO0_BUF_8(i);
+		buf = *(data_ptr + (i % 4));
+		DPRINTF(" data[%d] = 0x%x fifo_data = 0x%x %s\n", i, data[i], buf, buf == data[i] ? "PASS" : "FAIL");
+		if(buf != data[i])
+		{
+			ok = 0;
+		}
+
+		if (fifo_ch->count != vcnt - 1)
+		{
+			DPRINTF(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 1, fifo_ch->count);
+			ok = 0;
+		}
+		vcnt -= 1;
+
+		if (fifo_ch->register_pointer != (cptr + 1))
+		{
+			DPRINTF(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 1, fifo_ch->register_pointer);
+			ok = 0;
+		}
+	}
+
+	return ok;
+}
+
+int
+apfifo_ooo_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+{
+	int ok = 1;
+	uint32_t word = 0;
+	uint32_t assembled_word = 0;
+
+	fifo_ch->register_pointer = 0;
+	word = fifo_ch->data;
+
+	fifo_ch->register_pointer = 0;
+	assembled_word = *(data_ptr + 3) | (*(data_ptr + 2) << 8) | (*(data_ptr + 1) << 16) | (*(data_ptr + 0) << 24);
+	DPRINTF(" 32-bit access = 0x%x 4x8-bit access = 0x%x %s\n", word, assembled_word, word == assembled_word ? "PASS" : "FAIL");
+	if (word != assembled_word)
+	{
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	assembled_word = (*(data_ptr + 0) << 24) | (*(data_ptr + 1) << 16) | (*(data_ptr + 2) << 8) | *(data_ptr + 3);
+	DPRINTF(" 32-bit access = 0x%x 4x8-bit access = 0x%x %s\n", word, assembled_word, word == assembled_word ? "PASS" : "FAIL");
+	if (word != assembled_word)
+	{
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	assembled_word = *(data_ptr + 3) | (*(data_ptr + 1) << 16) | (*(data_ptr + 2) << 8) | (*(data_ptr + 0) << 24);
+	DPRINTF(" 32-bit access = 0x%x 4x8-bit access = 0x%x %s\n", word, assembled_word, word == assembled_word ? "PASS" : "FAIL");
+	if (word != assembled_word)
+	{
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	assembled_word = (*(data_ptr + 1) << 16) | (*(data_ptr + 0) << 24) | *(data_ptr + 3) | (*(data_ptr + 2) << 8);
+	DPRINTF(" 32-bit access = 0x%x 4x8-bit access = 0x%x %s\n", word, assembled_word, word == assembled_word ? "PASS" : "FAIL");
+	if (word != assembled_word)
+	{
+		ok = 0;
+	}
+
+	return ok;
+}
+
+int
+apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+{
+	#define REGPTR_ERR(expected, actual) DPRINTF(" Register pointer error! Expected 0x%x, got 0x%x!\n", expected, actual)
+	int ok = 1;
+	uint32_t initial = 0;
+	uint32_t final = 0;
+
+	fifo_ch->register_pointer = 0;
+	initial = fifo_ch->data;
+
+	fifo_ch->register_pointer = 0;
+	final = *data_ptr;
+	if (fifo_ch->register_pointer != 1)
+	{
+		REGPTR_ERR(1, fifo_ch->register_pointer);
+		ok = 0;
+	}
+	final = fifo_ch->data;
+	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial == final ? "PASS" : "FAIL");
+	if (initial != final)
+	{
+		ok = 0;
+	}
+	if (fifo_ch->register_pointer != 5)
+	{
+		REGPTR_ERR(5, fifo_ch->register_pointer);
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	final = *data_ptr;
+	final = *data_ptr;
+	if (fifo_ch->register_pointer != 2)
+	{
+		REGPTR_ERR(2, fifo_ch->register_pointer);
+		ok = 0;
+	}
+	final = fifo_ch->data;
+	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial == final ? "PASS" : "FAIL");
+	if (initial != final)
+	{
+		ok = 0;
+	}
+	if (fifo_ch->register_pointer != 6)
+	{
+		REGPTR_ERR(6, fifo_ch->register_pointer);
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	final = *data_ptr;
+	final = *data_ptr;
+	final = *data_ptr;
+	if (fifo_ch->register_pointer != 3)
+	{
+		REGPTR_ERR(3, fifo_ch->register_pointer);
+		ok = 0;
+	}
+	final = fifo_ch->data;
+	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial == final ? "PASS" : "FAIL");
+	if (initial != final)
+	{
+		ok = 0;
+	}
+	if (fifo_ch->register_pointer != 7)
+	{
+		REGPTR_ERR(7, fifo_ch->register_pointer);
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	final = *data_ptr;
+	final = *data_ptr;
+	final = *data_ptr;
+	final = *data_ptr;
+	if (fifo_ch->register_pointer != 4)
+	{
+		REGPTR_ERR(4, fifo_ch->register_pointer);
+		ok = 0;
+	}
+	final = fifo_ch->data;
+	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial != final ? "PASS" : "FAIL");
+	if (initial == final)
+	{
+		ok = 0;
+	}
+	if (fifo_ch->register_pointer != 8)
+	{
+		REGPTR_ERR(8, fifo_ch->register_pointer);
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = 0;
+	final = *(data_ptr + 2);
+	final = *(data_ptr + 1);
+	final = *(data_ptr + 3);
+	if (fifo_ch->register_pointer != 3)
+	{
+		REGPTR_ERR(3, fifo_ch->register_pointer);
+		ok = 0;
+	}
+	final = fifo_ch->data;
+	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial == final ? "PASS" : "FAIL");
+	if (initial != final)
+	{
+		ok = 0;
+	}
+	if (fifo_ch->register_pointer != 7)
+	{
+		REGPTR_ERR(7, fifo_ch->register_pointer);
+		ok = 0;
+	}
+
+	return ok;
+}
+
+int
+apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
+{
+	int ok = 1;
+
+	fifo_ch->register_pointer = fifo_ch->dma_pointer - 0x8;
+	fifo_ch->data;
+	fifo_ch->data;
+	if(fifo_ch->register_pointer != fifo_ch->dma_pointer || fifo_ch->count != 0)
+	{
+		DPRINTF(" adv to 0 failed! register_pointer = 0x%x dma_pointer = 0x%x count = 0x%x\n", fifo_ch->register_pointer, fifo_ch->dma_pointer, fifo_ch->count);
+		ok = 0;
+	}
+
+	fifo_ch->data;
+	fifo_ch->data;
+	if(fifo_ch->register_pointer == fifo_ch->dma_pointer || fifo_ch->count != fifo_ch->size - 0x7)
+	{
+		DPRINTF(" adv past 0 failed! register_pointer = 0x%x dma_pointer = 0x%x count = 0x%x\n", fifo_ch->register_pointer, fifo_ch->dma_pointer, fifo_ch->count);
+		ok = 0;
+	}
+
+	// force overflow (wraps register_pointer around to 0)
+	fifo_ch->register_pointer = size - 0x7;
+	fifo_ch->data;
+	fifo_ch->data;
+	if(fifo_ch->register_pointer != 0)
+	{
+		DPRINTF(" register pointer did not overflow to 0! Actual = 0x%x\n", fifo_ch->register_pointer);
+		ok = 0;
+	}
+
+	return ok;
+}
+
+int
+apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size)
+{
+	printf(" FAIL - not complete\n");
+	int ok = 1;
+	uint32_t buf;
+	
+	// Basic write test (aligned)
+	fifo_ch->register_pointer = 0;
+	fifo_ch->data = 0xdecaf;
+	fifo_ch->register_pointer = 0;
+	buf = fifo_ch->data;
+	printf("buf = 0x%x %s\n", buf, buf == 0xdecaf ? "PASS" : "FAIL");
+	
+	// Basic write test (non-aligned, what exactly happens here?)
+	fifo_ch->register_pointer = 0;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	fifo_ch->register_pointer = 1;
+	fifo_ch->data = 0xdeadface;
+	fifo_ch->register_pointer = 0;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	fifo_ch->register_pointer = 0;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	fifo_ch->register_pointer = 2;
+	fifo_ch->data = 0xdeadface;
+	fifo_ch->register_pointer = 0;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	fifo_ch->register_pointer = 0;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	fifo_ch->register_pointer = 3;
+	fifo_ch->data = 0xdeadface;
+	fifo_ch->register_pointer = 0;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	// Write at overflow boundary (aligned)
+	fifo_ch->register_pointer = size - 3;
+	fifo_ch->data = 0xdecaf;
+	fifo_ch->data = 0xc0ffee;
+	fifo_ch->register_pointer = size - 3;
+	buf = fifo_ch->data;
+	printf("buf = 0x%x cptr = 0x%x cnt = 0x%x %s\n", buf, fifo_ch->register_pointer, fifo_ch->count, buf == 0xdecaf ? "PASS" : "FAIL");
+	if (buf != 0xdecaf)
+	{
+		ok = 0;
+	}
+
+	buf = fifo_ch->data;
+	printf("buf = 0x%x cptr = 0x%x cnt = 0x%x %s\n", buf, fifo_ch->register_pointer, fifo_ch->count, buf == 0xc0ffee ? "PASS" : "FAIL");
+	if (buf != 0xdecaf)
+	{
+		ok = 0;
+	}
+
+	// TODO: Write at overflow boundary (non-aligned)
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	fifo_ch->register_pointer = size - 2;
+	fifo_ch->data = 0xdeadface;
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	fifo_ch->register_pointer = size - 1;
+	fifo_ch->data = 0xfacebabe;
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	fifo_ch->register_pointer = size;
+	fifo_ch->data = 0xbeefdead;
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	fifo_ch->register_pointer = size - 3;
+	fifo_ch->data = 0xebfeadde;
+	fifo_ch->register_pointer = size - 3;
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	printf("fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+
+	ok = 0;
+	return ok;
+}
+
+int
+apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr, uint32_t size)
+{
+	int ok = 1;
+	uint16_t buf;
+	uint32_t lbuf;
+
+	// Basic write test (aligned)
+	fifo_ch->register_pointer = 0;
+	*data_ptr = 0xabba;
+	fifo_ch->register_pointer = 0;
+	buf = *data_ptr;
+	printf("buf = 0x%x %s\n", buf, buf == 0xabba ? "PASS" : "FAIL");
+	if(buf != 0xabba)
+	{
+		ok = 0;
+	}
+
+	// Like byte accesses, writing to the wrong slot will yield 0xffff
+	fifo_ch->register_pointer = size - 1;
+	*data_ptr = 0xb00b;
+	fifo_ch->register_pointer = size - 1;
+	buf = *(data_ptr + 2);
+	if(buf != 0xffff) // TODO: why is this failing?
+	{
+		printf(" Unexpected bad halfword 0x%x\n", buf);
+		ok = 0;
+	}
+
+	// Write to the correct slot
+	fifo_ch->register_pointer = size - 1;
+	*(data_ptr + 2) = 0xb00b;
+	fifo_ch->register_pointer = size - 1;
+	buf = *(data_ptr + 2);
+	if(buf != 0xb00b) // TODO: why is this failing?
+	{
+		printf(" Unexpected good halfword 0x%x\n", buf);
+		ok = 0;
+	}
+
+	// Write a full word as halfwords, then readback
+	fifo_ch->register_pointer = size - 0x3;
+	*data_ptr = 0xbcab;
+	*(data_ptr + 2) = 0x3412;
+	fifo_ch->register_pointer = size - 0x3;
+	lbuf = fifo_ch->data;
+	if (lbuf != 0xbcab3412) // TODO: why is this failing?
+	{
+		printf(" Halfword write sequence 1 failed! Got 0x%x\n", lbuf);
+		ok = 0;
+	}
+
+	// Writing to the same halfword address should break
+	fifo_ch->register_pointer = size - 0x3;
+	*data_ptr = 0xabcd;
+	*data_ptr = 0x9472;
+	fifo_ch->register_pointer = size - 0x3;
+	lbuf = fifo_ch->data;
+	if (lbuf != 0xabcdffff)
+	{
+		printf(" Halfword write sequence 2 failed! Got 0x%x\n", lbuf);
+		ok = 0;
+	}
+
+	// Misaligned writes are ignored
+	fifo_ch->register_pointer = size - 0x3;
+	fifo_ch->data = 0x0;
+	fifo_ch->register_pointer = size - 0x2;
+	*data_ptr = 0x4321;
+	fifo_ch->register_pointer = size - 0x3;
+	lbuf = fifo_ch->data;
+	if(lbuf != 0x0)
+	{
+		printf(" Misaligned halfword write test 1 failed! Got 0x%x\n", lbuf);
+		ok = 0;
+	}
+
+	fifo_ch->register_pointer = size - 0x3;
+	fifo_ch->data = 0x0;
+	fifo_ch->register_pointer = size;
+	*data_ptr = 0x4321;
+	fifo_ch->register_pointer = size - 0x3;
+	lbuf = fifo_ch->data;
+	if(lbuf != 0x0)
+	{
+		printf(" Misaligned halfword write test 2 failed! Got 0x%x\n", lbuf);
+		ok = 0;
+	}
+
+	return ok;
+}
+
+int
+apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr, uint32_t size)
+{
+	int ok = 1;
+	uint8_t buf;
+	uint32_t lbuf;
+
+	// Write a byte and read it back
+	fifo_ch->register_pointer = 0;
+	*data_ptr = 0xfb;
+	fifo_ch->register_pointer = 0;
+	buf = *data_ptr;
+	printf("buf = 0x%x %s\n", buf, buf == 0xfb ? "PASS" : "FAIL");
+	if(buf != 0xfb)
+	{
+		ok = 0;
+	}
+
+	// Writing a byte to the wrong "spot" for the count will cause 0xff to be written
+	fifo_ch->register_pointer = size;
+	*data_ptr = 0xbf;
+	fifo_ch->register_pointer = size;
+	buf = *(data_ptr + 3);
+	if (buf != 0xff)
+	{
+		printf(" Unexpected bad byte 0x%x!\n", buf);
+		ok = 0;
+	}
+
+	// Fixing the alignment should let us write the correct byte
+	fifo_ch->register_pointer = size;
+	*(data_ptr + 3) = 0xbf;
+	fifo_ch->register_pointer = size;
+	buf = *(data_ptr + 3);
+	if (buf != 0xbf)
+	{
+		printf(" Unexpected good byte 0x%x!\n", buf);
+		ok = 0;
+	}
+
+	// Write a full word as bytes, then readback
+	fifo_ch->register_pointer = size - 0x3;
+	*data_ptr = 0xab;
+	*(data_ptr + 1) = 0xbc;
+	*(data_ptr + 2) = 0x12;
+	*(data_ptr + 3) = 0x34;
+	fifo_ch->register_pointer = size - 0x3;
+	lbuf = fifo_ch->data;
+	if (lbuf != 0xabbc1234)
+	{
+		printf(" Byte write sequence 1 failed! Got 0x%x\n", lbuf);
+		ok = 0;
+	}
+
+	// Writing to the same byte address should break
+	fifo_ch->register_pointer = size - 0x3;
+	*data_ptr = 0xab;
+	*data_ptr = 0xbc;
+	*data_ptr = 0x12;
+	*data_ptr = 0x34;
+	fifo_ch->register_pointer = size - 0x3;
+	lbuf = fifo_ch->data;
+	if (lbuf != 0xabff0000)
+	{
+		printf(" Byte write sequence 2 failed! Got 0x%x\n", lbuf);
+		ok = 0;
+	}
+
+	return ok;
+}
+
+int
+apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
+{
+	int ok = 1;
+	uint32_t buf;
+
+	fifo_ch->size = 0x7fff;
+	fifo_ch->address = 0x0;
+	fifo_ch->register_pointer = 0;
+	fifo_ch->data = 0xca5cade;
+	fifo_ch->register_pointer = 0;
+	buf = fifo_ch->data;
+	printf("buf = 0x%x\n", buf);
+	ok = buf == 0xca5cade;
+
+	fifo_ch->size = 0x4fff;
+	fifo_ch->address = 0x3000;
+	fifo_ch->register_pointer = 0;
+	fifo_ch->data = 0xca5cade;
+	fifo_ch->register_pointer = 0;
+	buf = fifo_ch->data;
+	printf("buf = 0x%x\n", buf);
+	if(ok)
+	{
+		ok = buf == 0xca5cade;
+	}
+
+	// TODO: double-check overflow in this condition
+	// TODO: size that doesn't end in f?
+
+	return ok;
+}
+
+void
+apfifo_test()
+{
+	printf("Starting CXD8442Q WSC-FIFOQ functional tests...\n");
+	struct fifo_channel *fd_fifo_ch = APFIFO0_FD;
+	volatile uint8_t *byte_data_accessor = (uint8_t *)&fd_fifo_ch->data;
+
+	dump_apfifo_channel(fd_fifo_ch);
+
+	printf("Starting tests...\n");
+	
+	// Common configuration for first round of tests
+	fd_fifo_ch->size = 0x1fff;
+	fd_fifo_ch->address = 0x0;
+
+	// Basic read tests
+	LOGRESULT(apfifo_byte_access_test(fd_fifo_ch, byte_data_accessor));
+	LOGRESULT(apfifo_halfword_access_test(fd_fifo_ch, (volatile uint16_t *)&fd_fifo_ch->data));
+	LOGRESULT(apfifo_word_access_test(fd_fifo_ch));
+
+	// Edge-case-y read tests
+	LOGRESULT(apfifo_ooo_access_test(fd_fifo_ch, byte_data_accessor));
+	LOGRESULT(apfifo_partial_word_test(fd_fifo_ch, byte_data_accessor));
+	LOGRESULT(apfifo_cnt_cptr_test(fd_fifo_ch, fd_fifo_ch->size));
+
+	// Basic write tests
+	LOGRESULT(apfifo_byte_write_test(fd_fifo_ch, byte_data_accessor, fd_fifo_ch->size));
+	LOGRESULT(apfifo_halfword_write_test(fd_fifo_ch, (volatile uint16_t *)&fd_fifo_ch->data, fd_fifo_ch->size));
+	LOGRESULT(apfifo_word_write_test(fd_fifo_ch, fd_fifo_ch->size));
+
+	// FIFO channel control tests
+	LOGRESULT(apfifo_reconfigure_test(fd_fifo_ch));
+
+	// TODO: Interrupt testing
+	// TODO: DMA testing
+	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
+	
+	printf("1..%d\nTests complete!\n\n", tap);
+
+	dump_apfifo_channel(fd_fifo_ch);
+
+	printf("\nExiting to APmonitor...\n");
+	_rtt();
 }
 
 void
