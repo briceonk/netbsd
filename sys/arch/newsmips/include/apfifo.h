@@ -19,7 +19,11 @@ struct fifo_channel
     volatile uint32_t data;
 };
 
+#define APFIFO0_CH0 ((struct fifo_channel*)(0xbed00000))
+#define APFIFO0_CH1 ((struct fifo_channel*)(0xbed20000))
 #define APFIFO0_FD ((struct fifo_channel*)(0xbed20000))
+#define APFIFO0_CH4 ((struct fifo_channel*)(0xbed30000))
+
 #define APFIFO0_CHIP_MODE *((volatile uint32_t*)0xbec80000)
 #define APFIFO0_BUF_32(x) *((volatile uint32_t*)(0xbed80000 + 4 * x))
 #define APFIFO0_BUF_16(x) *((volatile uint16_t*)(0xbed80000 + 2 * x))

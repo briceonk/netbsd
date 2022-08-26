@@ -30,6 +30,7 @@
 #include <lib/libsa/stand.h>
 #include <lib/libsa/loadfile.h>
 
+#include <machine/adrsmap.h>
 #include <machine/apcall.h>
 #include <machine/bootinfo.h>
 #include <machine/cpu.h>
@@ -48,6 +49,8 @@ static int tap = 0;
 
 void apfifo_test(void);
 void dump_apfifo_channel(struct fifo_channel *fifo_ch);
+void print_intstat(void);
+void intclr(void);
 int apfifo_word_access_test(struct fifo_channel *fifo_ch);
 int apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr);
 int apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr);
@@ -58,7 +61,12 @@ int apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size);
 int apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr, uint32_t size);
 int apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr, uint32_t size);
 int apfifo_reconfigure_test(struct fifo_channel *fifo_ch);
+int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch);
 void boot(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+uint32_t get_nstime(void);
+void init_channel(struct fifo_channel *fifo_ch);
+
+// Note: command to pad boot2.fs for MAME: dd if=/dev/null of=boot2.fs bs=1 count=1 seek=1474560
 
 void mips1_flushicache(void *, int);
 extern char _edata[], _end[];
@@ -78,6 +86,12 @@ char *kernels[] = { "/netbsd", "/netbsd.gz", NULL };
 #else
 # define DPRINTF printf
 #endif
+
+uint32_t
+get_nstime()
+{
+	return *((uint32_t*)NEWS5000_FREERUN);
+}
 
 void
 boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
@@ -282,6 +296,30 @@ dump_apfifo_channel(struct fifo_channel *fifo_ch)
 	DPRINTF("FIFO configuration dump end ---\n");
 }
 
+void
+print_intstat()
+{
+	DPRINTF("INTST0 = 0x%x INTST1 = 0x%x INTST2 = 0x%x INTST3 = 0x%x INTST4 = 0x%x INTST5 = 0x%x\n", *((uint32_t*)NEWS5000_INTST0), *((uint32_t*)NEWS5000_INTST1), *((uint32_t*)NEWS5000_INTST2), *((uint32_t*)NEWS5000_INTST3), *((uint32_t*)NEWS5000_INTST4), *((uint32_t*)NEWS5000_INTST5));
+}
+
+void
+intclr()
+{
+	*((uint32_t*)NEWS5000_INTCLR0) = 0xffffffff; // TODO: ????
+	*((uint32_t*)NEWS5000_INTCLR1) = 0xffffffff; // TODO: ????
+	*((uint32_t*)NEWS5000_INTCLR2) = 0xffffffff; // TODO: ????
+	*((uint32_t*)NEWS5000_INTCLR3) = 0xffffffff; // TODO: ????
+	*((uint32_t*)NEWS5000_INTCLR4) = 0xffffffff; // TODO: ????
+	*((uint32_t*)NEWS5000_INTCLR5) = 0xffffffff; // TODO: ????
+}
+
+void
+init_channel(struct fifo_channel *fifo_ch, uint32_t address, uint32_t size)
+{
+	fifo_ch->size = size;
+	fifo_ch->address = address;
+}
+
 int
 apfifo_word_access_test(struct fifo_channel *fifo_ch)
 {
@@ -465,6 +503,8 @@ apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_pt
 	uint32_t final = 0;
 
 	fifo_ch->register_pointer = 0;
+	fifo_ch->data = 0xabbacaab;
+	fifo_ch->register_pointer = 0;
 	initial = fifo_ch->data;
 
 	fifo_ch->register_pointer = 0;
@@ -538,7 +578,7 @@ apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_pt
 		ok = 0;
 	}
 	final = fifo_ch->data;
-	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial != final ? "PASS" : "FAIL");
+	DPRINTF(" initial = 0x%x final = 0x%x %s\n", initial, final, initial != final ? "PASS" : "FAIL"); // XXX right?
 	if (initial == final)
 	{
 		ok = 0;
@@ -916,21 +956,150 @@ apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 	return ok;
 }
 
+int
+apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
+{
+	int i;
+	uint32_t inst, temp;
+	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+
+	print_intstat();
+	intclr();
+	*((uint32_t*)NEWS5000_INTEN0) = 0xffffffff; // enable all lvl0 interrupts
+	print_intstat();
+
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	DPRINTF("Set INTCTRL to 0\n");
+	fifo_ch->intctrl = 0x0;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	DPRINTF("Set INTCTRL to 0x7\n");
+	fifo_ch->intctrl = 0x7;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	DPRINTF("Read two dwords when cnt = 0x%x\n", fifo_ch->count);
+	fifo_ch->data;
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	// read more data to trigger time delay interrupt
+	//fifo_ch->unknown3 = 0xfff; // max 0xfff
+	DPRINTF("Read two dwords when cnt = 0x%x\n", fifo_ch->count);
+	fifo_ch->data;
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+	fifo_ch->unknown3 = 0xfff; // TODO: remove this and the following line and move to a separate test
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	DPRINTF("Dead spin 1 start at 0x%x....\n", get_nstime());
+	inst = 0;
+	for (i = 0; i < 100000; ++i) {
+		if ((i % 10) == 0)
+		{
+			temp = fifo_ch->intstat;
+			if (inst != temp)
+			{
+				inst = temp;
+				if(inst == 0x1c)
+				{
+					DPRINTF("\nFinish at approx 0x%x", get_nstime());
+				}
+				else
+				{
+					DPRINTF("0x%x ", inst);
+				}
+			}
+		}
+	}
+	DPRINTF("\n");
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	// dead spin for a bit to see if the delay int triggers?
+	DPRINTF("Dead spin 2....\n");
+	inst = 0;
+	for (i = 0; i < 100000; ++i) {
+		if ((i % 10) == 0)
+		{
+			temp = fifo_ch->intstat;
+			if (inst != temp)
+			{
+				inst = temp;
+				DPRINTF("0x%x ", inst);
+			}
+		}
+	}
+	DPRINTF("\n");
+
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+	fifo_ch->data;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+	fifo_ch->unknown3 = 0xf00;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	DPRINTF("FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+
+	DPRINTF("Dead spin 3....\n");
+	inst = 0;
+	for (i = 0; i < 100000; ++i) {
+		if ((i % 10) == 0)
+		{
+			temp = fifo_ch->intstat;
+			if (inst != temp)
+			{
+				inst = temp;
+				DPRINTF("0x%x ", inst);
+			}
+		}
+		if (i == 50)
+		{
+			fifo_ch->data;
+			DPRINTF("\nRead data!\n");
+			// TODO: try this but with watermark
+		}
+		if (i == 100)
+		{
+			DPRINTF("\nAbout to reset dcnt! FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+			fifo_ch->unknown3 = 0xf00;
+			DPRINTF("Reset dcnt! FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+		}
+	}
+	DPRINTF("\n");
+
+	return 0;
+}
+
 void
 apfifo_test()
 {
 	printf("Starting CXD8442Q WSC-FIFOQ functional tests...\n");
-	struct fifo_channel *fd_fifo_ch = APFIFO0_FD;
-	volatile uint8_t *byte_data_accessor = (uint8_t *)&fd_fifo_ch->data;
+	// volatile uint8_t *byte_data_accessor = (uint8_t *)&fd_fifo_ch->data;
 
 	dump_apfifo_channel(fd_fifo_ch);
 
 	printf("Starting tests...\n");
+	DPRINTF("start time = 0x%x\n", get_nstime());
 	
 	// Common configuration for first round of tests
-	fd_fifo_ch->size = 0x1fff;
-	fd_fifo_ch->address = 0x0;
+	init_channel(APFIFO0_FD, 0x0, 0x1fff);
+	init_channel(APFIFO0_CH0, 0x2000, 0x1fff);
+	init_channel(APFIFO0_CH1, 0x4000, 0x1fff);
+	init_channel(APFIFO0_CH3, 0x6000, 0x1fff);
 
+/*
 	// Basic read tests
 	LOGRESULT(apfifo_byte_access_test(fd_fifo_ch, byte_data_accessor));
 	LOGRESULT(apfifo_halfword_access_test(fd_fifo_ch, (volatile uint16_t *)&fd_fifo_ch->data));
@@ -945,15 +1114,21 @@ apfifo_test()
 	LOGRESULT(apfifo_byte_write_test(fd_fifo_ch, byte_data_accessor, fd_fifo_ch->size));
 	LOGRESULT(apfifo_halfword_write_test(fd_fifo_ch, (volatile uint16_t *)&fd_fifo_ch->data, fd_fifo_ch->size));
 	LOGRESULT(apfifo_word_write_test(fd_fifo_ch, fd_fifo_ch->size));
+*/
+
+	LOGRESULT(apfifo_delay_interrupt_test(fd_fifo_ch));
+	LOGRESULT(apfifo_delay_interrupt_test(APFIFO0_CH0));
+	LOGRESULT(apfifo_delay_interrupt_test(APFIFO0_CH3));
+	LOGRESULT(apfifo_delay_interrupt_test(APFIFO0_CH1));
+
+	// TODO: DMA testing	
+	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
 
 	// FIFO channel control tests
-	LOGRESULT(apfifo_reconfigure_test(fd_fifo_ch));
-
-	// TODO: Interrupt testing
-	// TODO: DMA testing
-	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
+	// LOGRESULT(apfifo_reconfigure_test(fd_fifo_ch));
 	
-	printf("1..%d\nTests complete!\n\n", tap);
+	printf("1..%d\nTests complete!\n", tap);
+	DPRINTF("end time = 0x%x\n\n", get_nstime());
 
 	dump_apfifo_channel(fd_fifo_ch);
 
