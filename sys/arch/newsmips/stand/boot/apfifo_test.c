@@ -517,11 +517,21 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 		ok = 0;
 	}
 
+	fifo_ch->register_pointer = 2;
+	*(data_ptr + 1) = 0xb00b;
+	fifo_ch->register_pointer = 2;
+	buf = *(data_ptr + 1);
+	printf("buf = 0x%x %s\n", buf, buf == 0xb00b ? "PASS" : "FAIL");
+	if(buf != 0xb00b)
+	{
+		ok = 0;
+	}
+
 	// Like byte accesses, writing to the wrong slot will yield 0xffff
 	fifo_ch->register_pointer = size - 1;
 	*data_ptr = 0xb00b;
 	fifo_ch->register_pointer = size - 1;
-	buf = *(data_ptr + 2);
+	buf = *(data_ptr + 1);
 	if(buf != 0xffff) // TODO: why is this failing?
 	{
 		printf(" Unexpected bad halfword 0x%x\n", buf);
@@ -530,10 +540,10 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 
 	// Write to the correct slot
 	fifo_ch->register_pointer = size - 1;
-	*(data_ptr + 2) = 0xb00b;
+	*(data_ptr + 1) = 0xb00b;
 	fifo_ch->register_pointer = size - 1;
-	buf = *(data_ptr + 2);
-	if(buf != 0xb00b) // TODO: why is this failing?
+	buf = *(data_ptr + 1);
+	if(buf != 0xb00b)
 	{
 		printf(" Unexpected good halfword 0x%x\n", buf);
 		ok = 0;
@@ -542,10 +552,10 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	// Write a full word as halfwords, then readback
 	fifo_ch->register_pointer = size - 0x3;
 	*data_ptr = 0xbcab;
-	*(data_ptr + 2) = 0x3412;
+	*(data_ptr + 1) = 0x3412;
 	fifo_ch->register_pointer = size - 0x3;
 	lbuf = fifo_ch->data;
-	if (lbuf != 0xbcab3412) // TODO: why is this failing?
+	if (lbuf != 0xbcab3412)
 	{
 		printf(" Halfword write sequence 1 failed! Got 0x%x\n", lbuf);
 		ok = 0;
@@ -570,7 +580,7 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*data_ptr = 0x4321;
 	fifo_ch->register_pointer = size - 0x3;
 	lbuf = fifo_ch->data;
-	if(lbuf != 0x0)
+	if(lbuf != 0x210000) // part of the data was in the valid area
 	{
 		printf(" Misaligned halfword write test 1 failed! Got 0x%x\n", lbuf);
 		ok = 0;
@@ -614,9 +624,16 @@ apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr,
 	*data_ptr = 0xbf;
 	fifo_ch->register_pointer = size;
 	buf = *(data_ptr + 3);
+	fifo_ch->register_pointer = size -0x3;
+	lbuf = fifo_ch->data;
 	if (buf != 0xff)
 	{
 		printf(" Unexpected bad byte 0x%x!\n", buf);
+		ok = 0;
+	}
+	else if (lbuf != 0xff)
+	{
+		printf(" Unexpected bad word readback 0x%x!\n", lbuf);
 		ok = 0;
 	}
 
@@ -695,15 +712,17 @@ apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 	return ok;
 }
 
-void calculate_delay_count_interval(struct fifo_channel *fifo_ch, uint32_t count)
+uint32_t calculate_delay_count_interval(struct fifo_channel *fifo_ch, uint32_t count)
 {
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
 	fifo_ch->unknown3 = count;
 	uint32_t start_time = get_ustime();
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
 	while (fifo_ch->intstat != 0x1c) {}
-	uint32_t end_time = get_ustime();
-	printf("%u/%u ticks per us when starting from 0x%x\n", count, end_time - start_time, count);
+	uint32_t run_time = get_ustime() - start_time;
+	uint32_t tick_rate = run_time / count;
+	printf("  %u/%u = %u us per tick when starting from 0x%x\n", run_time, count, tick_rate, count);
+	return tick_rate;
 }
 
 int
@@ -912,10 +931,6 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	{
 		printf("  Interrupt error! Count stopped unexpectedly!\n");
 	}
-	else
-	{
-		printf("  FIFO INTST = 0x%x\n", fifo_ch->intstat);
-	}
 
 	for (i = 0; i < 200000; ++i) { if (i % 2000 == 0) printf("."); }
 	printf("\n");
@@ -923,13 +938,6 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	{
 		printf("  Interrupt error! Count did not complete! INTST=0x%x\n", fifo_ch->intstat);
 	}
-
-	// for (i = 0; i < 100000; ++i) { if (i % 1000 == 0) printf("."); }
-	// printf("\n");
-	// if(fifo_ch->intstat != 0x0)
-	// {
-	// 	printf("  Interrupt error! Count did not complete! INTST=0x%x\n", fifo_ch->intstat);
-	// }
 
 	printf(" Check a smaller count and counter reset on dcnt write\n");
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
@@ -969,11 +977,13 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	}
 	printf("\n");
 
-	calculate_delay_count_interval(fifo_ch, 0xfff);
-	calculate_delay_count_interval(fifo_ch, 0xf00);
-	calculate_delay_count_interval(fifo_ch, 0xbaa);
-	calculate_delay_count_interval(fifo_ch, 0x800);
-	calculate_delay_count_interval(fifo_ch, 0x250);
+	uint32_t total = 0;
+	total += calculate_delay_count_interval(fifo_ch, 0xfff);
+	total += calculate_delay_count_interval(fifo_ch, 0xf00);
+	total += calculate_delay_count_interval(fifo_ch, 0xbaa);
+	total += calculate_delay_count_interval(fifo_ch, 0x800);
+	total += calculate_delay_count_interval(fifo_ch, 0x250);
+	printf(" Average us per tick: %u\n", total / 5);
 
 	return ok;
 }
@@ -1011,6 +1021,7 @@ apfifo_test()
 	LOGRESULT(apfifo_word_write_test(APFIFO0_FD, APFIFO0_FD->size));
 
 	LOGRESULT(apfifo_delay_interrupt_test(APFIFO0_FD));
+	// TODO: multichannel delay interrupt test
 
 	// TODO: DMA testing	
 	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?

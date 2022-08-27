@@ -19,6 +19,6 @@ int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch);
 void boot(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 uint32_t get_ustime(void);
 void init_channel(struct fifo_channel *fifo_ch, uint32_t address, uint32_t size);
-void calculate_delay_count_interval(struct fifo_channel *fifo_ch, uint32_t count);
+uint32_t calculate_delay_count_interval(struct fifo_channel *fifo_ch, uint32_t count);
 
 #endif
