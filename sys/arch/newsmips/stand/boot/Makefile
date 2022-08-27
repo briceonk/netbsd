@@ -3,7 +3,7 @@
 S!= cd ${.CURDIR}/../../../..; pwd
 
 PROG= boot
-SRCS= locore.S boot.c bootinfo.c devopen.c net.c netif_news.c
+SRCS= locore.S boot.c bootinfo.c devopen.c net.c netif_news.c apfifo_test.c
 NOMAN= # defined
 STRIPFLAG=
 BINMODE= 444
