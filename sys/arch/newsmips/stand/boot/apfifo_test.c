@@ -988,19 +988,26 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	return ok;
 }
 
+void 
+usleep(uint32_t microseconds)
+{
+	uint32_t start = get_ustime();
+	while (get_ustime() < start + microseconds) {}
+}
+
 int
 apfifo_dma_test()
 {
 	printf("Starting FDC DMA test!\n");
 	dump_apfifo_channel(APFIFO0_FD);
-	uint32_t *sra = (uint32_t*)0xbed60000;
-	// uint8_t *srb = (uint8_t*)0xbed60004;
-	uint32_t *dor = (uint32_t*)0xbed60008;
-	// uint8_t *tdr = (uint8_t*)0xbed6000c;
-	uint32_t *msr_dsr = (uint32_t*)0xbed60010;
-	uint32_t *fdc_fifo = (uint32_t*)0xbed60014;
-	uint32_t *dir_ccr = (uint32_t*)0xbed6001c;
-	uint32_t *fdc_aux1 = (uint32_t*)0xbed60204;
+	volatile uint32_t *sra = (uint32_t*)0xbed60000;
+	// volatile uint8_t *srb = (uint8_t*)0xbed60004;
+	volatile uint32_t *dor = (uint32_t*)0xbed60008;
+	// volatile uint8_t *tdr = (uint8_t*)0xbed6000c;
+	volatile uint32_t *msr_dsr = (uint32_t*)0xbed60010;
+	volatile uint32_t *fdc_fifo = (uint32_t*)0xbed60014;
+	volatile uint32_t *dir_ccr = (uint32_t*)0xbed6001c;
+	volatile uint32_t *fdc_aux1 = (uint32_t*)0xbed60204;
 
 	printf("\nreset FDC\n");
 	// [:fdc] dor = 00
@@ -1010,20 +1017,28 @@ apfifo_dma_test()
 	// [:fdc] dsr_w 40 (':cpu' (9FC10D48))
 	// [:cpu] ':cpu' (9FC10D54): unmapped program memory write to 1ED60200 = 0000000000000001 & 00000000FFFFFFFF
 	// [:fdc] dor = 14
+
+	printf("MSR = 0x%x ", *msr_dsr);
 	*dor = 0x00;
 	printf("dor = 0x%x\n", *dor);
 	*dor = 0x04;
 	printf("dor = 0x%x\n", *dor);
-	*msr_dsr = 0x80;
-	printf("msr = 0x%x\n", *msr_dsr);
-	*fdc_aux1 = 0x1;
-	printf("fdc_aux1 = 0x%x\n", *fdc_aux1);
+	// *msr_dsr = 0x80;
+	// printf("dsr = 0x%x\n", *msr_dsr);
 	*dor = 0x00;
+	// printf("dor = 0x%x\n", *dor);
+	printf("MSR = 0x%x\n", *msr_dsr);
+	// *msr_dsr = 0x40;
+	// printf("msr = 0x%x\n", *msr_dsr);
+
+	printf("Read INTST0, expect unset? 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	*fdc_aux1 = 0x1;
+	printf("Set FDC AUX to 0x1\n");
+	printf("Read INTST0, expect unset?: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+
+	*dor = 0x1C;
 	printf("dor = 0x%x\n", *dor);
-	*msr_dsr = 0x40;
-	printf("msr = 0x%x\n", *msr_dsr);
-	*dor = 0x14;
-	printf("dor = 0x%x\n", *dor);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	
 	// internal stuff?
 	// [:fdc] polled 0 : 0 -> 1
@@ -1034,16 +1049,60 @@ apfifo_dma_test()
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
 	printf("Read INTST0, expect set: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
 
+	printf("\nExecute command sense interrupt status\n");
+	*fdc_fifo = 0x08;
+	while ((*msr_dsr & 0x80) != 0x80) {}
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res1 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res2 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+
+
+	printf("\nExecute command sense interrupt status\n");
+	*fdc_fifo = 0x08;
+	while ((*msr_dsr & 0x80) != 0x80) {}
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res1 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res2 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+
+	printf("\nExecute command sense interrupt status\n");
+	*fdc_fifo = 0x08;
+	while ((*msr_dsr & 0x80) != 0x80) {}
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res1 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res2 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+
+	printf("\nExecute command sense interrupt status\n");
+	*fdc_fifo = 0x08;
+	while ((*msr_dsr & 0x80) != 0x80) {}
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res1 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+	printf("res2 = 0x%x\n", *fdc_fifo);
+	printf("MSR = 0x%x\n", *msr_dsr);
+
 	// Check ready
 	// [:fdc] ':cpu' (9FC10EE8): sra_r = 0xcc
-	printf("Read sra, expect 0xcc: 0x%x\n", *sra);
+	printf("\nRead sra, expect 0xcc: 0x%x\n", *sra);
 
-	printf("Execute specify df 10 command\n");
+	printf("Execute specify df 10 command");
 	*msr_dsr = 0x1c;
 	*dir_ccr = 0x00;
 	*fdc_fifo = 0x03;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0xdf;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x10;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
+
 	// [:fdc] dsr_w 1c (':cpu' (9FC0FEC8))
 	// [:fdc] ':cpu' (9FC0FEE0): ccr_w(0x00)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x03)
@@ -1051,81 +1110,98 @@ apfifo_dma_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0xdf)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x10)
 	// [:fdc] command specify df 10: step_rate=3 ms, head_unload=240 ms, head_load=16 ms, non_dma=false
-	printf("Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	printf("\nRead INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
 
 	printf("Execute perpindicular command\n");
 	*fdc_fifo = 0x12;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x05;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x12)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x05)
 	// [:fdc] command perpendicular
+	printf("Read msr: 0x%x\n", *msr_dsr);
+	printf("Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
 
-	printf("Execute configure 00 08 00 command\n");
+	printf("Wait for msr");
+	while ((*msr_dsr & 0xff) != 0x80) { printf("."); }
+
+	printf("\nExecute configure 00 08 00 command\n");
 	*fdc_fifo = 0x13;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x00;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x08;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x00;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x13)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x08)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
 	// [:fdc] command configure 00 08 00
+	printf("Read msr: 0x%x\n", *msr_dsr);
+	printf("Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
 
 	printf("Execute recalibrate 0 command\n");
 	*fdc_fifo = 0x07;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x00;
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x07)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
 	// [:fdc] command recalibrate 0
+
+	printf("Wait for 3 seconds...");
+	usleep(3000000);
+	printf(" Done!\n");
+	printf("Read sra: 0x%x\n", *sra);
+	printf("Read msr: 0x%x\n", *msr_dsr);
+	// printf("Wait for interrupt\n");
+	//while (*((uint32_t*)NEWS5000_INTST0) == 0) { printf("int = 0x%x  sra = 0x%x msr = 0x%x", *((uint32_t*)NEWS5000_INTST0), *sra, *msr_dsr); }
+	// [:] intst_r: INTST0 = 0x0
+	// ...
+	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
+	// [:] intst_r: INTST0 = 0x10
+
+	// printf("\nExecute command sense interrupt status\n");
+	// *fdc_fifo = 0x08;
+	// [:fdc] ':cpu' (9FC11760): fifo_w(0x08)
+	// [:] generic_irq_w: INTST0 IRQ 16 set to 0
+	// [:fdc] command sense interrupt status (fid=0 20 00) (':cpu' (9FC11760))
+
+	//printf("Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
+	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
+	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
+
+	/*
+	printf("Execute recalibrate 0 command\n");
+	*fdc_fifo = 0x07;
+	*fdc_fifo = 0x00;
 
 	printf("Read sra: 0x%x\n", *sra);
-	printf("Wait for interrupt...\n");
-	while (*((uint32_t*)NEWS5000_INTST0) == 0) { }
-	// [:] intst_r: INTST0 = 0x0
-	// ...
-	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
-	// [:] intst_r: INTST0 = 0x10
+	printf("Read msr: 0x%x\n", *msr_dsr);
+	printf("Wait for 3 seconds...");
+	usleep(3000000);
+	printf(" Done!\n");
+	printf("Read sra: 0x%x\n", *sra);
+	printf("Read msr: 0x%x\n", *msr_dsr);
+	*/
 
-	printf("\nExecute command sense interrupt status\n");
-	*fdc_fifo = 0x08;
-	// [:fdc] ':cpu' (9FC11760): fifo_w(0x08)
-	// [:] generic_irq_w: INTST0 IRQ 16 set to 0
-	// [:fdc] command sense interrupt status (fid=0 20 00) (':cpu' (9FC11760))
-
-	printf("Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
-
-	printf("Execute recalibrate 0 command\n");
-	*fdc_fifo = 0x07;
-	*fdc_fifo = 0x00;
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x07)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
-	// [:fdc] command recalibrate 0
-
-	printf("Wait for interrupt...\n");
-	while (*((uint32_t*)NEWS5000_INTST0) == 0) { }
-	// [:] intst_r: INTST0 = 0x0
-	// ...
-	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
-	// [:] intst_r: INTST0 = 0x10
-
-	printf("\nExecute command sense interrupt status\n");
-	*fdc_fifo = 0x08;
-	// [:fdc] ':cpu' (9FC11760): fifo_w(0x08)
-	// [:] generic_irq_w: INTST0 IRQ 16 set to 0
-	// [:fdc] command sense interrupt status (fid=0 20 00) (':cpu' (9FC11760))
-
-	printf("Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
-	// [:] LED_FLOPPY: ON
 	printf("LED_FLOPPY = ON\n"); // don't feel like setting LEDs for now - will add library for this later if it doesn't already exist
 
-	printf("Configure fifo channel");
+	printf("Configure fifo channel...\n");
 	APFIFO0_FD->size = 0x7fff;
 	APFIFO0_FD->address = 0x0;
-	APFIFO0_FD->intctrl = 0x0;
+	APFIFO0_FD->intctrl = 0x0; // todo: check if enabling this in other tests changes anything
 	APFIFO0_FD->dma_pointer  = 0x0;
 	APFIFO0_FD->register_pointer  = 0x0;
 	APFIFO0_FD->dma_mode  = 0x0;
@@ -1142,14 +1218,41 @@ apfifo_dma_test()
 
 	printf("Trigger FDC command\n");
 	*fdc_fifo = 0x46;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x00;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x00;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x00;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x01;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x02;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x10;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0x1b;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	*fdc_fifo = 0xff;
+
+	usleep(1000);
+	printf("MSR = 0x%x\n", *msr_dsr);
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x46)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
@@ -1163,7 +1266,13 @@ apfifo_dma_test()
 
 	// Then, poll INTST0 until floppy IRQ (0x10) is set, then results should??? be ready
 	printf("Wait for interrupt...\n");
-	while (*((uint32_t*)NEWS5000_INTST0) == 0) { printf("."); }
+	printf("Read sra: 0x%x\n", *sra);
+	printf("Read msr: 0x%x\n", *msr_dsr);
+	while (*((uint32_t*)NEWS5000_INTST0) == 0) { 
+		printf("Read sra: 0x%x ", *sra);
+		printf("Read msr: 0x%x\n", *msr_dsr);
+		usleep(10000);
+	}
 
 	printf("FDC command done!\n");
 	dump_apfifo_channel(APFIFO0_FD);
@@ -1175,7 +1284,7 @@ void
 apfifo_test()
 {
 	printf("Starting CXD8442Q WSC-FIFOQ functional tests...\n");
-	volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
+	// volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
 
 	dump_apfifo_channel(APFIFO0_FD);
 
@@ -1185,7 +1294,7 @@ apfifo_test()
 	// TODO: DMA testing	
 	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
 	LOGRESULT(apfifo_dma_test());
-	
+	/*
 	// Common configuration for first round of tests
 	init_channel(APFIFO0_FD, 0x0, 0x1fff);
 	init_channel(APFIFO0_CH0, 0x2000, 0x1fff);
@@ -1212,9 +1321,12 @@ apfifo_test()
 
 	// FIFO channel control tests
 	LOGRESULT(apfifo_reconfigure_test(APFIFO0_FD));
+	*/
 	
 	printf("1..%d\nTests complete!\n", tap);
 	printf("end time = 0x%x\n\n", get_ustime());
+	usleep(100);
+	printf("end time2 = 0x%x\n\n", get_ustime());
 
 	dump_apfifo_channel(APFIFO0_FD);
 
