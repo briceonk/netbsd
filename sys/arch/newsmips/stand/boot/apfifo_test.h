@@ -16,6 +16,7 @@ int apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *
 int apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr, uint32_t size);
 int apfifo_reconfigure_test(struct fifo_channel *fifo_ch);
 int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch);
+int apfifo_dma_test(void);
 void boot(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 uint32_t get_ustime(void);
 void init_channel(struct fifo_channel *fifo_ch, uint32_t address, uint32_t size);
