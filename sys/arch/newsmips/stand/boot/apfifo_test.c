@@ -1274,7 +1274,14 @@ apfifo_dma_test()
 		usleep(10000);
 	}
 
-	printf("FDC command done!\n");
+	printf("FDC command done! Reading out data...\n");
+	while (APFIFO0_FD->count)
+	{
+		APFIFO0_FD->data;
+		printf(".");
+	}
+	printf("\n");
+
 	dump_apfifo_channel(APFIFO0_FD);
 
 	return 0;
