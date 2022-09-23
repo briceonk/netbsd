@@ -54,6 +54,8 @@ int apbus;
 char *devs[] = { "sd", "fh", "fd", NULL, NULL, "rd", "st" };
 char *kernels[] = { "/netbsd", "/netbsd.gz", NULL };
 
+char digits[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
 #ifdef BOOT_DEBUG
 # define DPRINTF printf
 #else
@@ -107,6 +109,10 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 		char *bootdev = (char *)a1;
 		int argc = a2;
 		char **argv = (char **)a3;
+		int i;
+		char buffer[120];
+		int count;
+		uint32_t* ptr = (uint32_t*)0xbfc00000;
 
 		DPRINTF("APbus-based system\n");
 
@@ -142,7 +148,14 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 		temp = (uint32_t *)0xbf520010;
 		DPRINTF("B-bus Clock Freq: 0x%x\n", *temp);
 
-		apfifo_test();
+		for (i = 0; i <= 0x2000; i++)
+		{
+			count = snprintf(buffer, sizeof(buffer), "%p: %x %x %x %x\n", ptr, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
+			apcall_write(1, &buffer, count);
+			ptr += 4;
+		}
+
+		//apfifo_test();
 		_rtt();
 
 		/* XXX use "sonic()" instead of "tftp()" */
