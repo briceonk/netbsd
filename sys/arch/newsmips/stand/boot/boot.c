@@ -54,7 +54,7 @@ int apbus;
 char *devs[] = { "sd", "fh", "fd", NULL, NULL, "rd", "st" };
 char *kernels[] = { "/netbsd", "/netbsd.gz", NULL };
 
-char digits[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+char digits[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
 #ifdef BOOT_DEBUG
 # define DPRINTF printf
@@ -110,8 +110,9 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 		int argc = a2;
 		char **argv = (char **)a3;
 		int i;
+		uint32_t x;
 		char buffer[120];
-		int count;
+		// int count;
 		uint32_t* ptr = (uint32_t*)0xbfc00000;
 
 		DPRINTF("APbus-based system\n");
@@ -150,8 +151,65 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 
 		for (i = 0; i <= 0x2000; i++)
 		{
-			count = snprintf(buffer, sizeof(buffer), "%p: %x %x %x %x\n", ptr, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
-			apcall_write(1, &buffer, count);
+			// count = snprintf(buffer, sizeof(buffer), "%p: %x %x %x %x\n", ptr, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
+			//apcall_write(1, &buffer, count);
+			// printf(buffer, sizeof(buffer), "%p: %x %x %x %x\n", ptr, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
+			// Fill buffer with pattern
+			x = (uint32_t)ptr;
+			// printf("yo 0x%x 0x%x 0x%x 0x%x\n", x, *ptr, *ptr & 0xf0000000);
+			buffer[0] = digits[(x & 0xf0000000U) >> 28];
+			buffer[1] = digits[(x & 0xf000000U) >> 24];
+			buffer[2] = digits[(x & 0xf00000U) >> 20];
+			buffer[3] = digits[(x & 0xf0000U) >> 16];
+			buffer[4] = digits[(x & 0xf000U) >> 12];
+			buffer[5] = digits[(x & 0xf00U) >> 8];
+			buffer[6] = digits[(x & 0xf0U) >> 4];
+			buffer[7] = digits[(x & 0xfU)];
+			buffer[8] = ':';
+			buffer[9] = ' ';
+			x = *ptr;
+			buffer[10] = digits[(x & 0xf0000000U) >> 28];
+			buffer[11] = digits[(x & 0xf000000U) >> 24];
+			buffer[12] = digits[(x & 0xf00000U) >> 20];
+			buffer[13] = digits[(x & 0xf0000U) >> 16];
+			buffer[14] = digits[(x & 0xf000U) >> 12];
+			buffer[15] = digits[(x & 0xf00U) >> 8];
+			buffer[16] = digits[(x & 0xf0U) >> 4];
+			buffer[17] = digits[(x & 0xfU)];
+			buffer[18] = ' ';
+			x = *(ptr + 1);
+			buffer[19] = digits[(x & 0xf0000000U) >> 28];
+			buffer[20] = digits[(x & 0xf000000U) >> 24];
+			buffer[21] = digits[(x & 0xf00000U) >> 20];
+			buffer[22] = digits[(x & 0xf0000U) >> 16];
+			buffer[23] = digits[(x & 0xf000U) >> 12];
+			buffer[24] = digits[(x & 0xf00U) >> 8];
+			buffer[25] = digits[(x & 0xf0U) >> 4];
+			buffer[26] = digits[(x & 0xfU)];
+			buffer[27] = ' ';
+			x = *(ptr + 2);
+			buffer[28] = digits[(x & 0xf0000000U) >> 28];
+			buffer[29] = digits[(x & 0xf000000U) >> 24];
+			buffer[30] = digits[(x & 0xf00000U) >> 20];
+			buffer[31] = digits[(x & 0xf0000U) >> 16];
+			buffer[32] = digits[(x & 0xf000U) >> 12];
+			buffer[33] = digits[(x & 0xf00U) >> 8];
+			buffer[34] = digits[(x & 0xf0U) >> 4];
+			buffer[35] = digits[(x & 0xfU)];
+			buffer[36] = ' ';
+			x = *(ptr + 3);
+			buffer[37] = digits[(x & 0xf0000000U) >> 28];
+			buffer[38] = digits[(x & 0xf000000U) >> 24];
+			buffer[39] = digits[(x & 0xf00000U) >> 20];
+			buffer[40] = digits[(x & 0xf0000U) >> 16];
+			buffer[41] = digits[(x & 0xf000U) >> 12];
+			buffer[42] = digits[(x & 0xf00U) >> 8];
+			buffer[43] = digits[(x & 0xf0U) >> 4];
+			buffer[44] = digits[(x & 0xfU)];
+			buffer[45] = '\n';
+
+			apcall_write(1, &buffer, 46);
+
 			ptr += 4;
 		}
 
