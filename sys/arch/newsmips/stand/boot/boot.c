@@ -110,10 +110,10 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 		int argc = a2;
 		char **argv = (char **)a3;
 		int i;
-		uint32_t x;
-		char buffer[120];
+		// uint32_t x;
+		// char buffer[120];
 		// int count;
-		uint32_t* ptr = (uint32_t*)0xbfc00000;
+		// uint32_t* ptr = (uint32_t*)0xbfc00000;
 
 		DPRINTF("APbus-based system\n");
 
@@ -149,6 +149,7 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 		temp = (uint32_t *)0xbf520010;
 		DPRINTF("B-bus Clock Freq: 0x%x\n", *temp);
 
+		/*
 		for (i = 0; i <= 0x2000; i++)
 		{
 			// count = snprintf(buffer, sizeof(buffer), "%p: %x %x %x %x\n", ptr, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
@@ -212,8 +213,9 @@ boot(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 
 			ptr += 4;
 		}
+		*/
 
-		//apfifo_test();
+		apfifo_test();
 		_rtt();
 
 		/* XXX use "sonic()" instead of "tftp()" */

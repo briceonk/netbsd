@@ -2,8 +2,9 @@
 #define APFIFO_TEST
 
 void apfifo_test(void);
-void dump_apfifo_channel(struct fifo_channel *fifo_ch);
-void print_intstat(void);
+void log(int level, const char* format, ...);
+void dump_apfifo_channel(int log_level, struct fifo_channel *fifo_ch);
+void log_intstat(int log_level);
 void intclr(void);
 int apfifo_word_access_test(struct fifo_channel *fifo_ch);
 int apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr);

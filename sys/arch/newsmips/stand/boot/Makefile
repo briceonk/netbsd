@@ -18,7 +18,7 @@ CLEANFILES+= ${PROG}.elf ${PROG}.tmp
 LINKFLAGS= -x -N -Ttext a0700000 -e _start
 LINKFLAGS+= -T ${S}/arch/mips/conf/stand.ldscript
 CFLAGS= -Os -ffreestanding -mmemcpy -mno-abicalls -msoft-float -G 0
-CFLAGS+= -Wall -Wmissing-prototypes -Wstrict-prototypes -Wpointer-arith
+CFLAGS+= -Wall -Wmissing-prototypes -Wstrict-prototypes -Wpointer-arith -Wno-unknown-pragmas
 
 CPPFLAGS+= -DSUPPORT_USTARFS -DHAVE_CHANGEDISK_HOOK
 #CPPFLAGS+= -DSUN_BOOTPARAMS

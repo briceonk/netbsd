@@ -4,6 +4,12 @@
 #include <machine/apfifo.h>
 #include "apfifo_test.h"
 
+#pragma region Logging
+static int LOG_LEVEL = 0;
+#define TRACE 0
+#define INFO 1
+#define ERROR 2
+
 static int tap = 0;
 #define LOGRESULT(x) {               \
 	tap++;                           \
@@ -15,32 +21,46 @@ static int tap = 0;
 }
 
 void
-dump_apfifo_channel(struct fifo_channel *fifo_ch)
+log(int level, const char * format, ...)
 {
-	printf("FIFO configuration dump start ---\n");
-	printf("fifo_mask = 0x%x\n", fifo_ch->size);
-	printf("fifo_addr = 0x%x\n", fifo_ch->address);
-	printf("fifo_intc = 0x%x\n", fifo_ch->intclr);
-	printf("fifo_dmam = 0x%x\n", fifo_ch->dma_mode);
-	printf("fifo_wait = 0x%x\n", fifo_ch->unknown0);
-	printf("fifo_drqc = 0x%x\n", fifo_ch->unknown1);
-	printf("fifo_ictl = 0x%x\n", fifo_ch->intctrl);
-	printf("fifo_ista = 0x%x\n", fifo_ch->intstat);
-	printf("fifo_wmrk = 0x%x\n", fifo_ch->unknown2);
-	printf("fifo_dcnt = 0x%x\n", fifo_ch->unknown3);
-	printf("fifo_dptr = 0x%x\n", fifo_ch->dma_pointer);
-	printf("fifo_cptr = 0x%x\n", fifo_ch->register_pointer);
-	printf("fifo_vcnt = 0x%x\n", fifo_ch->count);
-	printf("fifo_data = 0x%x\n", fifo_ch->data);
-	printf("FIFO configuration dump end ---\n");
+	if (level >= LOG_LEVEL)
+	{
+		va_list args;
+		va_start(args, format);
+		vprintf(format, args);
+		va_end(args);
+	}
 }
 
 void
-print_intstat()
+dump_apfifo_channel(int log_level, struct fifo_channel *fifo_ch)
 {
-	printf("INTST0 = 0x%x INTST1 = 0x%x INTST2 = 0x%x INTST3 = 0x%x INTST4 = 0x%x INTST5 = 0x%x\n", *((uint32_t*)NEWS5000_INTST0), *((uint32_t*)NEWS5000_INTST1), *((uint32_t*)NEWS5000_INTST2), *((uint32_t*)NEWS5000_INTST3), *((uint32_t*)NEWS5000_INTST4), *((uint32_t*)NEWS5000_INTST5));
+	log(log_level, "FIFO configuration dump start ---\n");
+	log(log_level, "fifo_mask = 0x%x\n", fifo_ch->size);
+	log(log_level, "fifo_addr = 0x%x\n", fifo_ch->address);
+	log(log_level, "fifo_intc = 0x%x\n", fifo_ch->intclr);
+	log(log_level, "fifo_dmam = 0x%x\n", fifo_ch->dma_mode);
+	log(log_level, "fifo_wait = 0x%x\n", fifo_ch->unknown0);
+	log(log_level, "fifo_drqc = 0x%x\n", fifo_ch->unknown1);
+	log(log_level, "fifo_ictl = 0x%x\n", fifo_ch->intctrl);
+	log(log_level, "fifo_ista = 0x%x\n", fifo_ch->intstat);
+	log(log_level, "fifo_wmrk = 0x%x\n", fifo_ch->unknown2);
+	log(log_level, "fifo_dcnt = 0x%x\n", fifo_ch->unknown3);
+	log(log_level, "fifo_dptr = 0x%x\n", fifo_ch->dma_pointer);
+	log(log_level, "fifo_cptr = 0x%x\n", fifo_ch->register_pointer);
+	log(log_level, "fifo_vcnt = 0x%x\n", fifo_ch->count);
+	log(log_level, "fifo_data = 0x%x\n", fifo_ch->data);
+	log(log_level, "FIFO configuration dump end ---\n");
 }
 
+void
+log_intstat(int log_level)
+{
+	log(log_level, "INTST0 = 0x%x INTST1 = 0x%x INTST2 = 0x%x INTST3 = 0x%x INTST4 = 0x%x INTST5 = 0x%x\n", *((uint32_t*)NEWS5000_INTST0), *((uint32_t*)NEWS5000_INTST1), *((uint32_t*)NEWS5000_INTST2), *((uint32_t*)NEWS5000_INTST3), *((uint32_t*)NEWS5000_INTST4), *((uint32_t*)NEWS5000_INTST5));
+}
+#pragma endregion Logging
+
+#pragma region Utility functions
 void
 intclr()
 {
@@ -59,42 +79,51 @@ init_channel(struct fifo_channel *fifo_ch, uint32_t address, uint32_t size)
 	fifo_ch->address = address;
 }
 
+void 
+usleep(uint32_t microseconds)
+{
+	uint32_t start = get_ustime();
+	while (get_ustime() < start + microseconds) {}
+}
+#pragma endregion Utility functions
+
+#pragma region FIFO CPU-side access tests
 int
-apfifo_word_access_test(struct fifo_channel *fifo_ch)
+apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
 {
 	int ok = 1;
 	int i = 0;
-	uint32_t vcnt;
-	uint32_t buf;
 	uint32_t cptr;
-	uint32_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+	uint32_t vcnt;
+	uint8_t buf;
+	uint8_t data[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	// Set pointer to beginning of the FIFO block
 	fifo_ch->register_pointer = 0;
 	vcnt = fifo_ch->count;
 
 	// Read in the values we should get from the beginning of the fifo by reading from memory directly
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < 32; i++)
 	{
 		cptr = fifo_ch->register_pointer;
-		data[i] = APFIFO0_BUF_32(i);
-		buf = fifo_ch->data;
+		data[i] = APFIFO0_BUF_8(i);
+		buf = *(data_ptr + (i % 4));
 		printf(" data[%d] = 0x%x fifo_data = 0x%x %s\n", i, data[i], buf, buf == data[i] ? "PASS" : "FAIL");
 		if(buf != data[i])
 		{
 			ok = 0;
 		}
 
-		if (fifo_ch->count != vcnt - 4)
+		if (fifo_ch->count != vcnt - 1)
 		{
-			printf(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 4, fifo_ch->count);
+			printf(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 1, fifo_ch->count);
 			ok = 0;
 		}
-		vcnt -= 4;
+		vcnt -= 1;
 
-		if (fifo_ch->register_pointer != (cptr + 4))
+		if (fifo_ch->register_pointer != (cptr + 1))
 		{
-			printf(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 4, fifo_ch->register_pointer);
+			printf(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 1, fifo_ch->register_pointer);
 			ok = 0;
 		}
 	}
@@ -146,41 +175,41 @@ apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *dat
 }
 
 int
-apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+apfifo_word_access_test(struct fifo_channel *fifo_ch)
 {
 	int ok = 1;
 	int i = 0;
-	uint32_t cptr;
 	uint32_t vcnt;
-	uint8_t buf;
-	uint8_t data[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	uint32_t buf;
+	uint32_t cptr;
+	uint32_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 	// Set pointer to beginning of the FIFO block
 	fifo_ch->register_pointer = 0;
 	vcnt = fifo_ch->count;
 
 	// Read in the values we should get from the beginning of the fifo by reading from memory directly
-	for (i = 0; i < 32; i++)
+	for (i = 0; i < 8; i++)
 	{
 		cptr = fifo_ch->register_pointer;
-		data[i] = APFIFO0_BUF_8(i);
-		buf = *(data_ptr + (i % 4));
+		data[i] = APFIFO0_BUF_32(i);
+		buf = fifo_ch->data;
 		printf(" data[%d] = 0x%x fifo_data = 0x%x %s\n", i, data[i], buf, buf == data[i] ? "PASS" : "FAIL");
 		if(buf != data[i])
 		{
 			ok = 0;
 		}
 
-		if (fifo_ch->count != vcnt - 1)
+		if (fifo_ch->count != vcnt - 4)
 		{
-			printf(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 1, fifo_ch->count);
+			printf(" Count error! Expected 0x%x, got 0x%x!\n", vcnt - 4, fifo_ch->count);
 			ok = 0;
 		}
-		vcnt -= 1;
+		vcnt -= 4;
 
-		if (fifo_ch->register_pointer != (cptr + 1))
+		if (fifo_ch->register_pointer != (cptr + 4))
 		{
-			printf(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 1, fifo_ch->register_pointer);
+			printf(" Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 4, fifo_ch->register_pointer);
 			ok = 0;
 		}
 	}
@@ -386,7 +415,9 @@ apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
 
 	return ok;
 }
+#pragma endregion FIFO CPU-side access tests
 
+#pragma region FIFO write tests
 int
 apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size)
 {
@@ -678,7 +709,9 @@ apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr,
 
 	return ok;
 }
+#pragma endregion FIFO write tests
 
+#pragma region FIFO configuration tests
 int
 apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 {
@@ -711,7 +744,9 @@ apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 
 	return ok;
 }
+#pragma endregion FIFO configuration tests
 
+#pragma region FIFO interrupt tests
 uint32_t calculate_delay_count_interval(struct fifo_channel *fifo_ch, uint32_t count)
 {
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
@@ -735,10 +770,10 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	fifo_ch->register_pointer = 0x100;
 	fifo_ch->dma_pointer = 0x100;
 
-	print_intstat();
+	log_intstat(INFO);
 	intclr();
-	*((uint32_t*)NEWS5000_INTEN0) = 0xffffffff; // enable all lvl0 interrupts
-	print_intstat();
+	*((uint32_t*)NEWS5000_INTEN0) = 0xffffffff; // enable all lvl0 interrupts - TODO: does INTST still get set if this is all 0?
+	log_intstat(INFO);
 
 	printf(" Check platform-level interrupt\n"); // TODO: see if FIFO INTCLR reg de-asserts platform int rather than internal int register
 	fifo_ch->intctrl = 0x0;
@@ -754,7 +789,7 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		ok = 0;
 	}
 
-	fifo_ch->intctrl = 0x4; // Enable time delay interrupt
+	fifo_ch->intctrl = 0x4; // Enable time delay interrupt - todo: test with this disabled
 	if (fifo_ch->intstat != 0x1c)
 	{
 		printf("  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
@@ -855,7 +890,7 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	if ((fifo_ch->intstat & 0xff) != 0x0)
 	{
 		printf("  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
-		dump_apfifo_channel(fifo_ch);
+		dump_apfifo_channel(INFO, fifo_ch);
 		ok = 0;
 	}
 	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
@@ -871,7 +906,7 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	if ((fifo_ch->intstat & 0xff) != 0x0)
 	{
 		printf("  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
-		dump_apfifo_channel(fifo_ch);
+		dump_apfifo_channel(INFO, fifo_ch);
 		ok = 0;
 	}
 	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
@@ -987,19 +1022,14 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 
 	return ok;
 }
+#pragma endregion FIFO interrupt tests
 
-void 
-usleep(uint32_t microseconds)
-{
-	uint32_t start = get_ustime();
-	while (get_ustime() < start + microseconds) {}
-}
-
+#pragma region FIFO DMA tests
 int
 apfifo_dma_read_test()
 {
 	printf("Starting FDC DMA test!\n");
-	dump_apfifo_channel(APFIFO0_FD);
+	dump_apfifo_channel(INFO, APFIFO0_FD);
 	volatile uint32_t *sra = (uint32_t*)0xbed60000;
 	// volatile uint8_t *srb = (uint8_t*)0xbed60004;
 	volatile uint32_t *dor = (uint32_t*)0xbed60008;
@@ -1277,12 +1307,11 @@ apfifo_dma_read_test()
 	printf("FDC command done! Reading out data...\n");
 	while (APFIFO0_FD->count)
 	{
-		APFIFO0_FD->data;
-		printf(".");
+		printf("0x%x ", APFIFO0_FD->data);
 	}
 	printf("\n");
 
-	dump_apfifo_channel(APFIFO0_FD);
+	dump_apfifo_channel(INFO, APFIFO0_FD);
 
 	return 0;
 }
@@ -1291,7 +1320,7 @@ int
 apfifo_dma_write_test()
 {
 	printf("Starting FDC DMA test!\n");
-	dump_apfifo_channel(APFIFO0_FD);
+	dump_apfifo_channel(INFO, APFIFO0_FD);
 	volatile uint32_t *sra = (uint32_t*)0xbed60000;
 	// volatile uint8_t *srb = (uint8_t*)0xbed60004;
 	volatile uint32_t *dor = (uint32_t*)0xbed60008;
@@ -1503,11 +1532,14 @@ apfifo_dma_write_test()
 	*((uint32_t*)NEWS5000_INTEN0) = 0x0;
 	
 	printf("Prepping data...\n");
-	APFIFO0_BUF_32(0) = 0x12345678;
-	APFIFO0_BUF_32(1) = 0xabcdef12;
+	//APFIFO0_BUF_32(0) = 0x12345678;
+	//APFIFO0_BUF_32(1) = 0xabcdef12;
+	APFIFO0_FD->dma_mode = 0x2; // set DMA direction TODO: check if this changes anything in the status or how the dma/reg pointers increment
+	APFIFO0_FD->data = 0x12345678;
+	APFIFO0_FD->data = 0xabcdef12; // todo: see if it always repeats the last byte - does enabling interrupts change how this works?
 
-	APFIFO0_FD->intctrl = 0x3;
-	APFIFO0_FD->dma_mode = 0xb; // enable DMA mode
+	APFIFO0_FD->intctrl = 0x0; // MROM disables FIFO interrupts when formatting - is this correct? Maybe it hooks off of the FDC interrupt? TODO: see if interrupts can be enabled here
+	APFIFO0_FD->dma_mode = 0x3; // enable DMA mode
 	// [:apfifo0] FIFO CH2: Setting fifo_size to 0x7fff
 	// [:apfifo0] FIFO CH2: Setting address to 0x0
 	// [:apfifo0] FIFO CH2: Set intctrl = 0x0 (':cpu' (9FC118C4))
@@ -1554,15 +1586,15 @@ apfifo_dma_write_test()
 
 	usleep(1000);
 	printf("MSR = 0x%x\n", *msr_dsr);
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x46)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x01)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x02)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x10)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x1b)
-	// [:fdc] ':cpu' (9FC113DC): fifo_w(0xff)
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x46) command
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00) select
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00) C
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00) H
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x01) R
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x02) N
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x10) EOT (# of sectors)
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x1b) GPL
+	// [:fdc] ':cpu' (9FC113DC): fifo_w(0xff) DTL
 	// [:fdc] command read data mfm cmd=46 sel=0 chrn=(0, 0, 1, 512) eot=10 gpl=1b dtl=ff rate=500000
 
 	// Then, poll INTST0 until floppy IRQ (0x10) is set, then results should??? be ready
@@ -1583,27 +1615,28 @@ apfifo_dma_write_test()
 	}
 	printf("\n");
 
-	dump_apfifo_channel(APFIFO0_FD);
+	dump_apfifo_channel(INFO, APFIFO0_FD);
 
 	return 0;
 }
+#pragma endregion FIFO DMA tests
 
 void
 apfifo_test()
 {
 	printf("Starting CXD8442Q WSC-FIFOQ functional tests...\n");
-	// volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
+	volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
 
-	dump_apfifo_channel(APFIFO0_FD);
+	dump_apfifo_channel(INFO, APFIFO0_FD);
 
 	printf("Starting tests...\n");
 	printf("start time = 0x%x\n", get_ustime());
 
 	// TODO: DMA testing	
 	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
-	//LOGRESULT(apfifo_dma_read_test());
-	LOGRESULT(apfifo_dma_write_test());
-	/*
+	// LOGRESULT(apfifo_dma_read_test());
+	// LOGRESULT(apfifo_dma_write_test());
+	
 	// Common configuration for first round of tests
 	init_channel(APFIFO0_FD, 0x0, 0x1fff);
 	init_channel(APFIFO0_CH0, 0x2000, 0x1fff);
@@ -1630,14 +1663,13 @@ apfifo_test()
 
 	// FIFO channel control tests
 	LOGRESULT(apfifo_reconfigure_test(APFIFO0_FD));
-	*/
 	
 	printf("1..%d\nTests complete!\n", tap);
 	printf("end time = 0x%x\n\n", get_ustime());
 	usleep(100);
 	printf("end time2 = 0x%x\n\n", get_ustime());
 
-	dump_apfifo_channel(APFIFO0_FD);
+	dump_apfifo_channel(INFO, APFIFO0_FD);
 
 	printf("\nExiting to APmonitor...\n");
 	return;
