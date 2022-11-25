@@ -773,7 +773,6 @@ int apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *
 
 int apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size)
 {
-	log(ERROR, " FAIL - not complete\n");
 	int ok = 1;
 	uint32_t buf;
 
@@ -782,114 +781,129 @@ int apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size)
 	fifo_ch->data = 0xdecaf;
 	fifo_ch->register_pointer = 0;
 	buf = fifo_ch->data;
-	log(TRACE, "buf = 0x%x %s\n", buf, buf == 0xdecaf ? "PASS" : "FAIL");
-
-	// Basic write test (non-aligned, what exactly happens here?)
-	fifo_ch->register_pointer = 0;
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
+	if (buf != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Basic word write test failed! buf = 0x%x\n", buf);
+	}
+	
+	// unaligned word writes are ignored
 	fifo_ch->register_pointer = 1;
 	fifo_ch->data = 0xdeadface;
 	fifo_ch->register_pointer = 0;
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
+	if (fifo_ch->data != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Unaligned word write took effect!\n");
+	}
 
-	fifo_ch->register_pointer = 0;
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
 	fifo_ch->register_pointer = 2;
 	fifo_ch->data = 0xdeadface;
 	fifo_ch->register_pointer = 0;
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
+	if (fifo_ch->data != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Unaligned word write took effect!\n");
+	}
 
-	fifo_ch->register_pointer = 0;
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
 	fifo_ch->register_pointer = 3;
 	fifo_ch->data = 0xdeadface;
 	fifo_ch->register_pointer = 0;
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
+	if (fifo_ch->data != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Unaligned word write took effect!\n");
+	}
 
-	// Write at overflow boundary (aligned)
+	// Write at wraparound boundary (aligned)
 	fifo_ch->register_pointer = size - 3;
 	fifo_ch->data = 0xdecaf;
 	fifo_ch->data = 0xc0ffee;
 	fifo_ch->register_pointer = size - 3;
 	buf = fifo_ch->data;
-	log(TRACE, "buf = 0x%x cptr = 0x%x cnt = 0x%x %s\n", buf, fifo_ch->register_pointer, fifo_ch->count, buf == 0xdecaf ? "PASS" : "FAIL");
 	if (buf != 0xdecaf)
 	{
 		ok = 0;
+		log(ERROR, " Wraparound readback 1 failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
 	}
 
 	buf = fifo_ch->data;
-	log(TRACE, "buf = 0x%x cptr = 0x%x cnt = 0x%x %s\n", buf, fifo_ch->register_pointer, fifo_ch->count, buf == 0xc0ffee ? "PASS" : "FAIL");
-	if (buf != 0xdecaf)
+	if (buf != 0xc0ffee)
 	{
 		ok = 0;
+		log(ERROR, " Wraparound readback 2 failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
 	}
 
-	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	// Write at wraparound boundary (non-aligned)
 	fifo_ch->register_pointer = size - 2;
 	fifo_ch->data = 0xdeadface;
 	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	buf = fifo_ch->data;
+	if (buf != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
 
-	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	buf = fifo_ch->data;
+	if (buf != 0xc0ffee)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
+
+
 	fifo_ch->register_pointer = size - 1;
 	fifo_ch->data = 0xfacebabe;
 	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	buf = fifo_ch->data;
+	if (buf != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
 
-	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	buf = fifo_ch->data;
+	if (buf != 0xc0ffee)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
+
 	fifo_ch->register_pointer = size;
 	fifo_ch->data = 0xbeefdead;
 	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	buf = fifo_ch->data;
+	if (buf != 0xdecaf)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
+
+	buf = fifo_ch->data;
+	if (buf != 0xc0ffee)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
 
 	fifo_ch->register_pointer = size - 3;
 	fifo_ch->data = 0xebfeadde;
 	fifo_ch->register_pointer = size - 3;
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
-	log(TRACE, "fifo[0x%x] = 0x%x\n", fifo_ch->register_pointer, fifo_ch->data);
+	buf = fifo_ch->data;
+	if (buf != 0xebfeadde)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
 
-	ok = 0;
+	buf = fifo_ch->data;
+	if (buf != 0xc0ffee)
+	{
+		ok = 0;
+		log(ERROR, " Wraparound readback failed! buf = 0x%x cptr = 0x%x cnt = 0x%x\n", buf, fifo_ch->register_pointer, fifo_ch->count);
+	}
+
 	return ok;
 }
 #pragma endregion FIFO write tests
@@ -940,7 +954,7 @@ int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		ok = 0;
 	}
 
-	fifo_ch->intctrl = 0x4; // Enable time delay interrupt - todo: test with this disabled
+	fifo_ch->intctrl = 0x4; // Enable time delay interrupt - todo: test with this disabled and with retrigger mode enabled
 	if (fifo_ch->intstat != 0x1c)
 	{
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
@@ -1087,6 +1101,8 @@ int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
+
+	// TODO: Check that intclear works
 
 	log(TRACE, " Check that interrupting count by reading out data allows count to continue\n");
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
@@ -1843,7 +1859,7 @@ int apfifo_dma_write_test()
 	// APFIFO0_BUF_32(1) = 0xabcdef12;
 	APFIFO0_FD->dma_mode = 0x2; // set DMA direction TODO: check if this changes anything in the status or how the dma/reg pointers increment
 	APFIFO0_FD->data = 0x12345678;
-	APFIFO0_FD->data = 0xabcdef12; // todo: see if it always repeats the last byte - does enabling interrupts change how this works?
+	APFIFO0_FD->data = 0xabcdefaa; // It always repeats the last byte until count is satisfied - does enabling interrupts change how this works?
 
 	APFIFO0_FD->intctrl = 0x0;	// MROM disables FIFO interrupts when formatting - is this correct? Maybe it hooks off of the FDC interrupt? TODO: see if interrupts can be enabled here
 	APFIFO0_FD->dma_mode = 0x3; // enable DMA mode
@@ -1969,7 +1985,7 @@ void apfifo_test()
 	// TODO: DMA testing
 	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
 	// LOGRESULT(apfifo_dma_read_test());
-	// LOGRESULT(apfifo_dma_write_test());
+	LOGRESULT(apfifo_dma_write_test());
 
 	log(INFO, "1..%d\nTests complete!\n", tap);
 	log(TRACE, "end time = 0x%x\n\n", get_ustime());
