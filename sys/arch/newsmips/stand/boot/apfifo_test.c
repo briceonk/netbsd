@@ -5,23 +5,23 @@
 #include "apfifo_test.h"
 
 #pragma region Logging
-static int LOG_LEVEL = 0;
 #define TRACE 0
 #define INFO 1
 #define ERROR 2
+static int LOG_LEVEL = TRACE;
 
 static int tap = 0;
-#define LOGRESULT(x) {               \
-	tap++;                           \
-	if (!x)                          \
-	{                                \
-		log(INFO, "not ");              \
-	}                                \
-	log(INFO, "ok %d - %s\n", tap, #x); \
-}
+#define LOGRESULT(x)                        \
+	{                                       \
+		tap++;                              \
+		if (!x)                             \
+		{                                   \
+			log(INFO, "not ");              \
+		}                                   \
+		log(INFO, "ok %d - %s\n", tap, #x); \
+	}
 
-void
-log(int level, const char * format, ...)
+void log(int level, const char *format, ...)
 {
 	if (level >= LOG_LEVEL)
 	{
@@ -32,8 +32,7 @@ log(int level, const char * format, ...)
 	}
 }
 
-void
-dump_apfifo_channel(int log_level, struct fifo_channel *fifo_ch)
+void dump_apfifo_channel(int log_level, struct fifo_channel *fifo_ch)
 {
 	log(log_level, "FIFO configuration dump start ---\n");
 	log(log_level, "fifo_mask = 0x%x\n", fifo_ch->size);
@@ -53,43 +52,40 @@ dump_apfifo_channel(int log_level, struct fifo_channel *fifo_ch)
 	log(log_level, "FIFO configuration dump end ---\n");
 }
 
-void
-log_intstat(int log_level)
+void log_intstat(int log_level)
 {
-	log(log_level, "INTST0 = 0x%x INTST1 = 0x%x INTST2 = 0x%x INTST3 = 0x%x INTST4 = 0x%x INTST5 = 0x%x\n", *((uint32_t*)NEWS5000_INTST0), *((uint32_t*)NEWS5000_INTST1), *((uint32_t*)NEWS5000_INTST2), *((uint32_t*)NEWS5000_INTST3), *((uint32_t*)NEWS5000_INTST4), *((uint32_t*)NEWS5000_INTST5));
+	log(log_level, "INTST0 = 0x%x INTST1 = 0x%x INTST2 = 0x%x INTST3 = 0x%x INTST4 = 0x%x INTST5 = 0x%x\n", *((uint32_t *)NEWS5000_INTST0), *((uint32_t *)NEWS5000_INTST1), *((uint32_t *)NEWS5000_INTST2), *((uint32_t *)NEWS5000_INTST3), *((uint32_t *)NEWS5000_INTST4), *((uint32_t *)NEWS5000_INTST5));
 }
 #pragma endregion Logging
 
 #pragma region Utility functions
-void
-intclr()
+void intclr()
 {
-	*((uint32_t*)NEWS5000_INTCLR0) = 0xffffffff;
-	*((uint32_t*)NEWS5000_INTCLR1) = 0xffffffff;
-	*((uint32_t*)NEWS5000_INTCLR2) = 0xffffffff;
-	*((uint32_t*)NEWS5000_INTCLR3) = 0xffffffff;
-	*((uint32_t*)NEWS5000_INTCLR4) = 0xffffffff;
-	*((uint32_t*)NEWS5000_INTCLR5) = 0xffffffff;
+	*((uint32_t *)NEWS5000_INTCLR0) = 0xffffffff;
+	*((uint32_t *)NEWS5000_INTCLR1) = 0xffffffff;
+	*((uint32_t *)NEWS5000_INTCLR2) = 0xffffffff;
+	*((uint32_t *)NEWS5000_INTCLR3) = 0xffffffff;
+	*((uint32_t *)NEWS5000_INTCLR4) = 0xffffffff;
+	*((uint32_t *)NEWS5000_INTCLR5) = 0xffffffff;
 }
 
-void
-init_channel(struct fifo_channel *fifo_ch, uint32_t address, uint32_t size)
+void init_channel(struct fifo_channel *fifo_ch, uint32_t address, uint32_t size)
 {
 	fifo_ch->size = size;
 	fifo_ch->address = address;
 }
 
-void 
-usleep(uint32_t microseconds)
+void usleep(uint32_t microseconds)
 {
 	uint32_t start = get_ustime();
-	while (get_ustime() < start + microseconds) {}
+	while (get_ustime() < start + microseconds)
+	{
+	}
 }
 #pragma endregion Utility functions
 
-#pragma region FIFO CPU-side access tests
-void
-apfifo_prep_read_test(struct fifo_channel *fifo_ch)
+#pragma region FIFO CPU - side access tests
+void apfifo_prep_read_test(struct fifo_channel *fifo_ch)
 {
 	// Point CPU to beginning of FIFO memory region
 	fifo_ch->register_pointer = 0;
@@ -107,8 +103,7 @@ apfifo_prep_read_test(struct fifo_channel *fifo_ch)
 }
 
 // Check that reading a byte out of the FIFO yields the byte at the CPU pointer offset
-int
-apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+int apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
 {
 	int ok = 1;
 	int i = 0;
@@ -127,7 +122,7 @@ apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr
 		mem_val = APFIFO0_BUF_8(i);
 		fifo_val = *(data_ptr + (i % 4));
 		log(TRACE, " mem[%d] = 0x%x fifo = 0x%x %s\n", i, mem_val, fifo_val, fifo_val == mem_val ? "PASS" : "FAIL");
-		if(fifo_val != mem_val)
+		if (fifo_val != mem_val)
 		{
 			log(ERROR, " Data error! Expected 0x%x, got 0x%x!\n", mem_val, fifo_val);
 			ok = 0;
@@ -138,7 +133,7 @@ apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr
 			log(ERROR, " Count error! Expected 0x%x, got 0x%x!\n", expected_count - 1, fifo_ch->count);
 			ok = 0;
 		}
-		
+
 		if (fifo_ch->register_pointer != (cptr + 1))
 		{
 			log(ERROR, " Register pointer error! Expected 0x%x, got 0x%x!\n", cptr + 1, fifo_ch->register_pointer);
@@ -152,8 +147,7 @@ apfifo_byte_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr
 }
 
 // Check that reading a half word out of the FIFO yields the aligned half word from memory
-int
-apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr)
+int apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr)
 {
 	int ok = 1;
 	int i = 0;
@@ -172,7 +166,7 @@ apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *dat
 		mem_val = APFIFO0_BUF_16(i);
 		fifo_val = *(data_ptr + (i % 2));
 		log(TRACE, " mem[%d] = 0x%x fifo_data = 0x%x %s\n", i, mem_val, fifo_val, fifo_val == mem_val ? "PASS" : "FAIL");
-		if(fifo_val != mem_val)
+		if (fifo_val != mem_val)
 		{
 			log(ERROR, " Data error! Expected 0x%x, got 0x%x!\n", mem_val, fifo_val);
 			ok = 0;
@@ -197,8 +191,7 @@ apfifo_halfword_access_test(struct fifo_channel *fifo_ch, volatile uint16_t *dat
 }
 
 // Check that reading a full word out of the FIFO yields the aligned word from memory
-int
-apfifo_word_access_test(struct fifo_channel *fifo_ch)
+int apfifo_word_access_test(struct fifo_channel *fifo_ch)
 {
 	int ok = 1;
 	int i = 0;
@@ -214,10 +207,10 @@ apfifo_word_access_test(struct fifo_channel *fifo_ch)
 	for (i = 0; i < 8; i++)
 	{
 		cptr = fifo_ch->register_pointer;
-		mem_val= APFIFO0_BUF_32(i);
+		mem_val = APFIFO0_BUF_32(i);
 		fifo_val = fifo_ch->data;
 		log(TRACE, " mem[%d] = 0x%x fifo_data = 0x%x %s\n", i, mem_val, fifo_val, fifo_val == mem_val ? "PASS" : "FAIL");
-		if(fifo_val != mem_val)
+		if (fifo_val != mem_val)
 		{
 			log(ERROR, " Data error! Expected 0x%x, got 0x%x!\n", mem_val, fifo_val);
 			ok = 0;
@@ -241,14 +234,13 @@ apfifo_word_access_test(struct fifo_channel *fifo_ch)
 }
 
 // Access partial words out of order, should still get the same 32-bit number
-int
-apfifo_ooo_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+int apfifo_ooo_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
 {
 	int ok = 1;
 	uint32_t word = 0;
 	uint32_t assembled_word = 0;
 
-	volatile uint16_t* hw_data_ptr = (uint16_t*)&fifo_ch->data;
+	volatile uint16_t *hw_data_ptr = (uint16_t *)&fifo_ch->data;
 
 	fifo_ch->register_pointer = 0;
 	word = fifo_ch->data;
@@ -304,15 +296,14 @@ apfifo_ooo_access_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
 	return ok;
 }
 
-int
-apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
+int apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr)
 {
-	#define REGPTR_ERR(expected, actual) log(ERROR, " Register pointer error! Expected 0x%x, got 0x%x!\n", expected, actual)
+#define REGPTR_ERR(expected, actual) log(ERROR, " Register pointer error! Expected 0x%x, got 0x%x!\n", expected, actual)
 	int ok = 1;
 	uint32_t initial = 0;
 	uint32_t final = 0;
 
-	volatile uint16_t* hw_data_ptr = (uint16_t*)&fifo_ch->data;
+	volatile uint16_t *hw_data_ptr = (uint16_t *)&fifo_ch->data;
 
 	// Set the first word, then do a readback of the first byte
 	fifo_ch->register_pointer = 0;
@@ -452,15 +443,14 @@ apfifo_partial_word_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_pt
 	return ok;
 }
 
-int
-apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
+int apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
 {
 	int ok = 1;
 
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 0x8;
 	fifo_ch->data;
 	fifo_ch->data;
-	if(fifo_ch->register_pointer != fifo_ch->dma_pointer || fifo_ch->count != 0)
+	if (fifo_ch->register_pointer != fifo_ch->dma_pointer || fifo_ch->count != 0)
 	{
 		log(ERROR, " adv to 0 failed! register_pointer = 0x%x dma_pointer = 0x%x count = 0x%x\n", fifo_ch->register_pointer, fifo_ch->dma_pointer, fifo_ch->count);
 		ok = 0;
@@ -468,7 +458,7 @@ apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
 
 	fifo_ch->data;
 	fifo_ch->data;
-	if(fifo_ch->register_pointer == fifo_ch->dma_pointer || fifo_ch->count != fifo_ch->size - 0x7)
+	if (fifo_ch->register_pointer == fifo_ch->dma_pointer || fifo_ch->count != fifo_ch->size - 0x7)
 	{
 		log(ERROR, " adv past 0 failed! register_pointer = 0x%x dma_pointer = 0x%x count = 0x%x\n", fifo_ch->register_pointer, fifo_ch->dma_pointer, fifo_ch->count);
 		ok = 0;
@@ -478,7 +468,7 @@ apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
 	fifo_ch->register_pointer = size - 0x7;
 	fifo_ch->data;
 	fifo_ch->data;
-	if(fifo_ch->register_pointer != 0)
+	if (fifo_ch->register_pointer != 0)
 	{
 		log(ERROR, " register pointer did not overflow to 0! Actual = 0x%x\n", fifo_ch->register_pointer);
 		ok = 0;
@@ -487,8 +477,7 @@ apfifo_cnt_cptr_test(struct fifo_channel *fifo_ch, uint32_t size)
 	return ok;
 }
 
-int
-apfifo_misaligned_read_test(struct fifo_channel *fifo_ch)
+int apfifo_misaligned_read_test(struct fifo_channel *fifo_ch)
 {
 	int ok = 1;
 	uint32_t fifo_val;
@@ -501,7 +490,7 @@ apfifo_misaligned_read_test(struct fifo_channel *fifo_ch)
 	// Fill the FIFO region with some data
 	APFIFO0_BUF_32(0) = 0x01234567;
 	APFIFO0_BUF_32(1) = 0x89abcdef;
-	
+
 	mem_val = 0x01234567;
 	fifo_val = fifo_ch->data;
 	if (fifo_val != mem_val)
@@ -534,7 +523,7 @@ apfifo_misaligned_read_test(struct fifo_channel *fifo_ch)
 
 	fifo_ch->register_pointer = 3;
 	log(TRACE, "count = 0x%x\n", fifo_ch->count);
-	fifo_val = fifo_ch->data;\
+	fifo_val = fifo_ch->data;
 	log(TRACE, "count = 0x%x\n", fifo_ch->count);
 	if (fifo_val != mem_val)
 	{
@@ -556,11 +545,10 @@ apfifo_misaligned_read_test(struct fifo_channel *fifo_ch)
 
 	return ok;
 }
-#pragma endregion FIFO CPU-side access tests
+#pragma endregion FIFO CPU - side access tests
 
 #pragma region FIFO write tests
-int
-apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr, uint32_t size)
+int apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr, uint32_t size)
 {
 	int ok = 1;
 	uint8_t buf;
@@ -572,7 +560,7 @@ apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr,
 	fifo_ch->register_pointer = 0;
 	buf = *data_ptr;
 	log(TRACE, "buf = 0x%x %s\n", buf, buf == 0xfb ? "PASS" : "FAIL");
-	if(buf != 0xfb)
+	if (buf != 0xfb)
 	{
 		ok = 0;
 	}
@@ -662,8 +650,7 @@ apfifo_byte_write_test(struct fifo_channel *fifo_ch, volatile uint8_t *data_ptr,
 	return ok;
 }
 
-int
-apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr, uint32_t size)
+int apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data_ptr, uint32_t size)
 {
 	int ok = 1;
 	uint16_t buf;
@@ -674,8 +661,8 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*data_ptr = 0xabba;
 	fifo_ch->register_pointer = 0;
 	buf = *data_ptr;
-	log(INFO, "buf = 0x%x %s\n", buf, buf == 0xabba ? "PASS" : "FAIL");
-	if(buf != 0xabba)
+	log(TRACE, "buf = 0x%x %s\n", buf, buf == 0xabba ? "PASS" : "FAIL");
+	if (buf != 0xabba)
 	{
 		ok = 0;
 	}
@@ -684,8 +671,8 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*(data_ptr + 1) = 0xb00b;
 	fifo_ch->register_pointer = 2;
 	buf = *(data_ptr + 1);
-	log(INFO, "buf = 0x%x %s\n", buf, buf == 0xb00b ? "PASS" : "FAIL");
-	if(buf != 0xb00b)
+	log(TRACE, "buf = 0x%x %s\n", buf, buf == 0xb00b ? "PASS" : "FAIL");
+	if (buf != 0xb00b)
 	{
 		ok = 0;
 	}
@@ -695,9 +682,9 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*data_ptr = 0x9ae7;
 	fifo_ch->register_pointer = size - 1;
 	buf = *(data_ptr + 1);
-	if(buf != 0xffff)
+	if (buf != 0xffff)
 	{
-		log(INFO, " Unexpected bad halfword 0x%x\n", buf);
+		log(ERROR, " Unexpected bad halfword 0x%x\n", buf);
 		ok = 0;
 	}
 
@@ -706,9 +693,9 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*(data_ptr + 1) = 0x3c7e;
 	fifo_ch->register_pointer = size - 1;
 	buf = *(data_ptr + 1);
-	if(buf != 0x3c7e)
+	if (buf != 0x3c7e)
 	{
-		log(INFO, " Unexpected good halfword 0x%x\n", buf);
+		log(ERROR, " Unexpected good halfword 0x%x\n", buf);
 		ok = 0;
 	}
 
@@ -720,7 +707,7 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	lbuf = fifo_ch->data;
 	if (lbuf != 0xbcab3412)
 	{
-		log(INFO, " Halfword write sequence 1 failed! Got 0x%x\n", lbuf);
+		log(ERROR, " Halfword write sequence 1 failed! Got 0x%x\n", lbuf);
 		ok = 0;
 	}
 
@@ -734,13 +721,13 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	lbuf = fifo_ch->data;
 	if (lbuf != 0xbcab3412)
 	{
-		log(INFO, " Halfword wraparound sequence 1 failed! Got 0x%x\n", lbuf);
+		log(ERROR, " Halfword wraparound sequence 1 failed! Got 0x%x\n", lbuf);
 		ok = 0;
 	}
 	lbuf = fifo_ch->data;
 	if (lbuf != 0xacabb00f)
 	{
-		log(INFO, " Halfword wraparound sequence 1 failed! Got 0x%x\n", lbuf);
+		log(ERROR, " Halfword wraparound sequence 1 failed! Got 0x%x\n", lbuf);
 		ok = 0;
 	}
 
@@ -752,7 +739,7 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	lbuf = fifo_ch->data;
 	if (lbuf != 0xabcdffff)
 	{
-		log(INFO, " Halfword write sequence 2 failed! Got 0x%x\n", lbuf);
+		log(ERROR, " Halfword write sequence 2 failed! Got 0x%x\n", lbuf);
 		ok = 0;
 	}
 
@@ -763,9 +750,9 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*data_ptr = 0x4321;
 	fifo_ch->register_pointer = size - 0x3;
 	lbuf = fifo_ch->data;
-	if(lbuf != 0x210000) // part of the data is in the valid area
+	if (lbuf != 0x210000) // part of the data is in the valid area
 	{
-		log(INFO, " Misaligned halfword write test 1 failed! Got 0x%x\n", lbuf);
+		log(ERROR, " Misaligned halfword write test 1 failed! Got 0x%x\n", lbuf);
 		ok = 0;
 	}
 
@@ -775,29 +762,28 @@ apfifo_halfword_write_test(struct fifo_channel *fifo_ch, volatile uint16_t *data
 	*data_ptr = 0x4321;
 	fifo_ch->register_pointer = size - 0x3;
 	lbuf = fifo_ch->data;
-	if(lbuf != 0x0)
+	if (lbuf != 0x0)
 	{
-		log(INFO, " Misaligned halfword write test 2 failed! Got 0x%x\n", lbuf);
+		log(ERROR, " Misaligned halfword write test 2 failed! Got 0x%x\n", lbuf);
 		ok = 0;
 	}
 
 	return ok;
 }
 
-int
-apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size)
+int apfifo_word_write_test(struct fifo_channel *fifo_ch, uint32_t size)
 {
 	log(ERROR, " FAIL - not complete\n");
 	int ok = 1;
 	uint32_t buf;
-	
+
 	// Basic write test (aligned)
 	fifo_ch->register_pointer = 0;
 	fifo_ch->data = 0xdecaf;
 	fifo_ch->register_pointer = 0;
 	buf = fifo_ch->data;
 	log(TRACE, "buf = 0x%x %s\n", buf, buf == 0xdecaf ? "PASS" : "FAIL");
-	
+
 	// Basic write test (non-aligned, what exactly happens here?)
 	fifo_ch->register_pointer = 0;
 	log(TRACE, "fifo cnt = 0x%x\n", fifo_ch->count);
@@ -915,15 +901,16 @@ uint32_t calculate_delay_count_interval(struct fifo_channel *fifo_ch, uint32_t c
 	fifo_ch->time_delay_count = count;
 	uint32_t start_time = get_ustime();
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
-	while (fifo_ch->intstat != 0x1c) {}
+	while (fifo_ch->intstat != 0x1c)
+	{
+	}
 	uint32_t run_time = get_ustime() - start_time;
 	uint32_t tick_rate = run_time / count;
 	log(TRACE, "  %u/%u = %u us per tick when starting from 0x%x\n", run_time, count, tick_rate, count);
 	return tick_rate;
 }
 
-int
-apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
+int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 {
 	int i;
 	uint32_t inst, temp;
@@ -932,12 +919,12 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	fifo_ch->register_pointer = 0x100;
 	fifo_ch->dma_pointer = 0x100;
 
-/*
-	log_intstat(INFO);
-	intclr();
-	*((uint32_t*)NEWS5000_INTEN0) = 0xffffffff; // enable all lvl0 interrupts - TODO: does INTST still get set if this is all 0?
-	log_intstat(INFO);
-*/
+	/*
+		log_intstat(INFO);
+		intclr();
+		*((uint32_t*)NEWS5000_INTEN0) = 0xffffffff; // enable all lvl0 interrupts - TODO: does INTST still get set if this is all 0?
+		log_intstat(INFO);
+	*/
 
 	// TODO: see if FIFO INTCLR reg de-asserts platform int rather than internal int register
 	fifo_ch->intctrl = 0x0;
@@ -947,9 +934,9 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
@@ -959,12 +946,11 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) == 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) == 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
-
 
 	fifo_ch->data;
 	fifo_ch->data;
@@ -973,9 +959,9 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
@@ -987,22 +973,23 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
 	log(TRACE, " Dead spin 1 start at 0x%x....\n", get_ustime());
 	inst = 0;
-	for (i = 0; i < 100000; ++i) {
+	for (i = 0; i < 100000; ++i)
+	{
 		if ((i % 10) == 0)
 		{
 			temp = fifo_ch->intstat;
 			if (inst != temp)
 			{
 				inst = temp;
-				if(inst == 0x1c)
+				if (inst == 0x1c)
 				{
 					log(TRACE, "\n Finish at approx 0x%x", get_ustime());
 				}
@@ -1029,25 +1016,29 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) == 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) == 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
-	fifo_ch->time_delay_count = 0xfff; 
+	fifo_ch->time_delay_count = 0xfff;
 	if ((fifo_ch->intstat & 0xff) != 0x10)
 	{
 		log(ERROR, "  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
-	for (i = 0; i < 100000; ++i) { if (i % 1000 == 0) log(TRACE, "."); }
+	for (i = 0; i < 100000; ++i)
+	{
+		if (i % 1000 == 0)
+			log(TRACE, ".");
+	}
 	log(TRACE, "\n");
 
 	// Time delay count should only apply once - it should instantly trigger
@@ -1059,14 +1050,18 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		dump_apfifo_channel(INFO, fifo_ch);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
 	fifo_ch->data;
-	for (i = 0; i < 100000; ++i) { if (i % 1000 == 0) log(TRACE, "."); }
+	for (i = 0; i < 100000; ++i)
+	{
+		if (i % 1000 == 0)
+			log(TRACE, ".");
+	}
 	log(TRACE, "\n");
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
 	if ((fifo_ch->intstat & 0xff) != 0x0)
@@ -1075,9 +1070,9 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		dump_apfifo_channel(ERROR, fifo_ch);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
@@ -1087,13 +1082,13 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) == 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) == 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
-	log(ERROR, " Check that interrupting count by reading out data allows count to continue\n");
+	log(TRACE, " Check that interrupting count by reading out data allows count to continue\n");
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
 	if (fifo_ch->intstat != 0x1c)
@@ -1101,41 +1096,49 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) == 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) == 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
-	fifo_ch->time_delay_count = 0xfff; 
+	fifo_ch->time_delay_count = 0xfff;
 	if ((fifo_ch->intstat & 0xff) != 0x10)
 	{
 		log(ERROR, "  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t*)NEWS5000_INTST0) != 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
 	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
 
-	for (i = 0; i < 1000; ++i) { if (i % 1000 == 0) log(TRACE, "."); }
+	for (i = 0; i < 1000; ++i)
+	{
+		if (i % 1000 == 0)
+			log(TRACE, ".");
+	}
 	log(TRACE, "\n");
 
 	fifo_ch->data;
 	fifo_ch->data;
-	if((fifo_ch->intstat & 0xff) != 0x0)
+	if ((fifo_ch->intstat & 0xff) != 0x0)
 	{
 		log(ERROR, "  Interrupt error! FIFO INTST was set to 0x%x!\n", fifo_ch->intstat);
 	}
-	else if(fifo_ch->intstat == 0x0)
+	else if (fifo_ch->intstat == 0x0)
 	{
 		log(ERROR, "  Interrupt error! Count stopped unexpectedly!\n");
 	}
 
-	for (i = 0; i < 200000; ++i) { if (i % 2000 == 0) log(TRACE, "."); }
+	for (i = 0; i < 200000; ++i)
+	{
+		if (i % 2000 == 0)
+			log(TRACE, ".");
+	}
 	log(TRACE, "\n");
-	if(fifo_ch->intstat != 0x0)
+	if (fifo_ch->intstat != 0x0)
 	{
 		log(ERROR, "  Interrupt error! Count did not complete! INTST=0x%x\n", fifo_ch->intstat);
 	}
@@ -1147,20 +1150,21 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 
 	log(TRACE, "Dead spin 3 start at 0x%x....\n", get_ustime());
 	inst = 0;
-	for (i = 0; i < 100000; ++i) {
+	for (i = 0; i < 100000; ++i)
+	{
 		if ((i % 10) == 0)
 		{
 			temp = fifo_ch->intstat;
 			if (inst != temp)
 			{
 				inst = temp;
-				if(inst == 0x1c)
+				if (inst == 0x1c)
 				{
-					log(INFO, "\nFinish at approx 0x%x", get_ustime());
+					log(TRACE, "\nFinish at approx 0x%x", get_ustime());
 				}
 				else
 				{
-					log(INFO, "0x%x ", inst);
+					log(TRACE, "0x%x ", inst);
 				}
 			}
 		}
@@ -1171,9 +1175,9 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		}
 		if (i == 100)
 		{
-			log(TRACE, "\nAbout to reset dcnt! FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+			log(TRACE, "\nAbout to reset dcnt! FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t *)NEWS5000_INTST0));
 			fifo_ch->time_delay_count = 0xf00;
-			log(TRACE, "Reset dcnt! FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t*)NEWS5000_INTST0));
+			log(TRACE, "Reset dcnt! FIFO INTST = 0x%x INTST0 = 0x%x\n", fifo_ch->intstat, *((uint32_t *)NEWS5000_INTST0));
 			// TODO: check result
 		}
 	}
@@ -1200,14 +1204,13 @@ apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 
 #pragma region FIFO configuration tests
 
-int
-apfifo_mask_test(struct fifo_channel *fifo_ch, uint32_t address, uint32_t mask)
+int apfifo_mask_test(struct fifo_channel *fifo_ch, uint32_t address, uint32_t mask)
 {
 	int ok = 1;
 	uint32_t buf;
 	log(TRACE, "apfifo_mask_test: 0x%x 0x%x\n", address, mask);
 	// It seems that the final physical byte address = base + (address | regptr)
-	
+
 	// Set FIFO configuration
 	fifo_ch->address = address;
 	fifo_ch->size = mask;
@@ -1217,12 +1220,12 @@ apfifo_mask_test(struct fifo_channel *fifo_ch, uint32_t address, uint32_t mask)
 	fifo_ch->data = 0x987451fa;
 	fifo_ch->register_pointer = 0;
 	buf = fifo_ch->data;
-	if(buf != 0x987451fa)
+	if (buf != 0x987451fa)
 	{
 		ok = 0;
 		log(ERROR, " Initial set failed!\n");
 	}
-	if(APFIFO0_BUF_32(address >> 2) != 0x987451fa)
+	if (APFIFO0_BUF_32(address >> 2) != 0x987451fa)
 	{
 		ok = 0;
 		log(ERROR, " Initial mem readback failed! 0x%x\n", APFIFO0_BUF_32(address >> 2));
@@ -1232,7 +1235,7 @@ apfifo_mask_test(struct fifo_channel *fifo_ch, uint32_t address, uint32_t mask)
 	// So, for some values of mask, this isn't actually wraparound.
 	// I'm not sure why it was designed this way (probably to make the wraparound logic easy),
 	// but it means that the system programmer must be careful to program in address/mask values that make sense
-	// otherwise, the FIFO will end up in strange areas of memory. 
+	// otherwise, the FIFO will end up in strange areas of memory.
 	fifo_ch->register_pointer = fifo_ch->size - 0x3;
 	uint32_t expected_reg_pointer = (fifo_ch->register_pointer + 4) & mask;
 	log(TRACE, " regptr = 0x%x\n", fifo_ch->register_pointer);
@@ -1243,38 +1246,38 @@ apfifo_mask_test(struct fifo_channel *fifo_ch, uint32_t address, uint32_t mask)
 		ok = 0;
 		log(ERROR, " Register pointer did not wrap around! Pointer = 0x%x\n", fifo_ch->register_pointer);
 	}
-	if(APFIFO0_BUF_32((address | ((mask - 0x3) & mask)) >> 2) != 0xca5cade)
+	if (APFIFO0_BUF_32((address | ((mask - 0x3) & mask)) >> 2) != 0xca5cade)
 	{
 		ok = 0;
 		log(ERROR, " Wraparound mem readback 1 failed! 0x%x\n", APFIFO0_BUF_32((address | ((mask - 0x3) & mask)) >> 2));
 	}
-	
+
 	fifo_ch->data = 0xfa115;
 	log(TRACE, " regptr = 0x%x\n", fifo_ch->register_pointer);
-	if (fifo_ch->register_pointer != ((expected_reg_pointer  + 4) & mask))
+	if (fifo_ch->register_pointer != ((expected_reg_pointer + 4) & mask))
 	{
 		ok = 0;
 		log(ERROR, " Register pointer did not increment properly! Pointer = 0x%x\n", fifo_ch->register_pointer);
 	}
-	
+
 	// Readback results
 	fifo_ch->register_pointer = fifo_ch->size - 0x3;
 	log(TRACE, " regptr = 0x%x\n", fifo_ch->register_pointer);
 	buf = fifo_ch->data;
 	log(TRACE, " regptr = 0x%x\n", fifo_ch->register_pointer);
-	if(ok)
+	if (ok)
 	{
 		ok = buf == 0xca5cade;
 	}
 
 	buf = fifo_ch->data;
 	log(TRACE, " regptr = 0x%x\n", fifo_ch->register_pointer);
-	if(ok)
+	if (ok)
 	{
 		ok = buf == 0xfa115;
 	}
 
-	if(APFIFO0_BUF_32(((address | (mask - 0x3)) >> 2)) != 0xca5cade || APFIFO0_BUF_32(((address | expected_reg_pointer) >> 2)) != 0xfa115)
+	if (APFIFO0_BUF_32(((address | (mask - 0x3)) >> 2)) != 0xca5cade || APFIFO0_BUF_32(((address | expected_reg_pointer) >> 2)) != 0xfa115)
 	{
 		log(ERROR, " Unexpected memory results! 0x%x 0x%x\n", APFIFO0_BUF_32(((address + mask - 0x3) >> 2)), APFIFO0_BUF_32((address >> 2)));
 	}
@@ -1282,8 +1285,7 @@ apfifo_mask_test(struct fifo_channel *fifo_ch, uint32_t address, uint32_t mask)
 	return ok;
 }
 
-int
-apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
+int apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 {
 	int ok = 1;
 
@@ -1300,7 +1302,7 @@ apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 	fifo_ch->address = 0x1000;
 	fifo_ch->register_pointer = 0x2000;
 	fifo_ch->data = 0x45329754;
-	if(APFIFO0_BUF_32(0x3000 >> 2) != 0x45329754)
+	if (APFIFO0_BUF_32(0x3000 >> 2) != 0x45329754)
 	{
 		ok = 0;
 		log(ERROR, " Address | Register Pointer check failed!\n");
@@ -1311,19 +1313,18 @@ apfifo_reconfigure_test(struct fifo_channel *fifo_ch)
 #pragma endregion FIFO configuration tests
 
 #pragma region FIFO DMA tests
-int
-apfifo_dma_read_test()
+int apfifo_dma_read_test()
 {
 	log(INFO, "Starting FDC DMA test!\n");
 	dump_apfifo_channel(INFO, APFIFO0_FD);
-	volatile uint32_t *sra = (uint32_t*)0xbed60000;
+	volatile uint32_t *sra = (uint32_t *)0xbed60000;
 	// volatile uint8_t *srb = (uint8_t*)0xbed60004;
-	volatile uint32_t *dor = (uint32_t*)0xbed60008;
+	volatile uint32_t *dor = (uint32_t *)0xbed60008;
 	// volatile uint8_t *tdr = (uint8_t*)0xbed6000c;
-	volatile uint32_t *msr_dsr = (uint32_t*)0xbed60010;
-	volatile uint32_t *fdc_fifo = (uint32_t*)0xbed60014;
-	volatile uint32_t *dir_ccr = (uint32_t*)0xbed6001c;
-	volatile uint32_t *fdc_aux1 = (uint32_t*)0xbed60204;
+	volatile uint32_t *msr_dsr = (uint32_t *)0xbed60010;
+	volatile uint32_t *fdc_fifo = (uint32_t *)0xbed60014;
+	volatile uint32_t *dir_ccr = (uint32_t *)0xbed6001c;
+	volatile uint32_t *fdc_aux1 = (uint32_t *)0xbed60204;
 
 	log(INFO, "\nreset FDC\n");
 	// [:fdc] dor = 00
@@ -1347,15 +1348,15 @@ apfifo_dma_read_test()
 	// *msr_dsr = 0x40;
 	// log(INFO, "msr = 0x%x\n", *msr_dsr);
 
-	log(INFO, "Read INTST0, expect unset? 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset? 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 	*fdc_aux1 = 0x1;
 	log(INFO, "Set FDC AUX to 0x1\n");
-	log(INFO, "Read INTST0, expect unset?: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset?: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	*dor = 0x1C;
 	log(INFO, "dor = 0x%x\n", *dor);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-	
+
 	// internal stuff?
 	// [:fdc] polled 0 : 0 -> 1
 	// [:fdc] polled 1 : 0 -> 1
@@ -1363,21 +1364,13 @@ apfifo_dma_read_test()
 	// [:fdc] polled 3 : 0 -> 1
 
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
-	log(INFO, "Read INTST0, expect set: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect set: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "\nExecute command sense interrupt status\n");
 	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
-	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
-	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-	log(INFO, "res2 = 0x%x\n", *fdc_fifo);
-	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-
-
-	log(INFO, "\nExecute command sense interrupt status\n");
-	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
 	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
@@ -1386,7 +1379,9 @@ apfifo_dma_read_test()
 
 	log(INFO, "\nExecute command sense interrupt status\n");
 	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
 	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
@@ -1395,7 +1390,20 @@ apfifo_dma_read_test()
 
 	log(INFO, "\nExecute command sense interrupt status\n");
 	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
+	log(INFO, "MSR = 0x%x\n", *msr_dsr);
+	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
+	log(INFO, "MSR = 0x%x\n", *msr_dsr);
+	log(INFO, "res2 = 0x%x\n", *fdc_fifo);
+	log(INFO, "MSR = 0x%x\n", *msr_dsr);
+
+	log(INFO, "\nExecute command sense interrupt status\n");
+	*fdc_fifo = 0x08;
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
 	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
@@ -1426,7 +1434,7 @@ apfifo_dma_read_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0xdf)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x10)
 	// [:fdc] command specify df 10: step_rate=3 ms, head_unload=240 ms, head_load=16 ms, non_dma=false
-	log(INFO, "\nRead INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "\nRead INTST0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "Execute perpindicular command\n");
 	*fdc_fifo = 0x12;
@@ -1439,10 +1447,13 @@ apfifo_dma_read_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x05)
 	// [:fdc] command perpendicular
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
-	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "Wait for msr");
-	while ((*msr_dsr & 0xff) != 0x80) { log(INFO, "."); }
+	while ((*msr_dsr & 0xff) != 0x80)
+	{
+		log(INFO, ".");
+	}
 
 	log(INFO, "\nExecute configure 00 08 00 command\n");
 	*fdc_fifo = 0x13;
@@ -1463,7 +1474,7 @@ apfifo_dma_read_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
 	// [:fdc] command configure 00 08 00
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
-	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "Execute recalibrate 0 command\n");
 	*fdc_fifo = 0x07;
@@ -1482,7 +1493,7 @@ apfifo_dma_read_test()
 	log(INFO, "Read sra: 0x%x\n", *sra);
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
 	// log(INFO, "Wait for interrupt\n");
-	//while (*((uint32_t*)NEWS5000_INTST0) == 0) { log(INFO, "int = 0x%x  sra = 0x%x msr = 0x%x", *((uint32_t*)NEWS5000_INTST0), *sra, *msr_dsr); }
+	// while (*((uint32_t*)NEWS5000_INTST0) == 0) { log(INFO, "int = 0x%x  sra = 0x%x msr = 0x%x", *((uint32_t*)NEWS5000_INTST0), *sra, *msr_dsr); }
 	// [:] intst_r: INTST0 = 0x0
 	// ...
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
@@ -1494,9 +1505,9 @@ apfifo_dma_read_test()
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 0
 	// [:fdc] command sense interrupt status (fid=0 20 00) (':cpu' (9FC11760))
 
-	//log(INFO, "Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
+	// log(INFO, "Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
+	//  [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
+	//  [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
 
 	/*
 	log(INFO, "Execute recalibrate 0 command\n");
@@ -1518,11 +1529,11 @@ apfifo_dma_read_test()
 	APFIFO0_FD->size = 0x7fff;
 	APFIFO0_FD->address = 0x0;
 	APFIFO0_FD->intctrl = 0x0; // todo: check if enabling this in other tests changes anything
-	APFIFO0_FD->dma_pointer  = 0x0;
-	APFIFO0_FD->register_pointer  = 0x0;
-	APFIFO0_FD->dma_mode  = 0x0;
+	APFIFO0_FD->dma_pointer = 0x0;
+	APFIFO0_FD->register_pointer = 0x0;
+	APFIFO0_FD->dma_mode = 0x0;
 	APFIFO0_FD->unknown2 = 0x10000; // watermark?
-	APFIFO0_FD->dma_mode = 0x1; // enable DMA mode
+	APFIFO0_FD->dma_mode = 0x1;		// enable DMA mode
 	// [:apfifo0] FIFO CH2: Setting fifo_size to 0x7fff
 	// [:apfifo0] FIFO CH2: Setting address to 0x0
 	// [:apfifo0] FIFO CH2: Set intctrl = 0x0 (':cpu' (9FC118C4))
@@ -1584,7 +1595,8 @@ apfifo_dma_read_test()
 	log(INFO, "Wait for interrupt...\n");
 	log(INFO, "Read sra: 0x%x\n", *sra);
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
-	while (*((uint32_t*)NEWS5000_INTST0) == 0) { 
+	while (*((uint32_t *)NEWS5000_INTST0) == 0)
+	{
 		log(INFO, "Read sra: 0x%x ", *sra);
 		log(INFO, "Read msr: 0x%x\n", *msr_dsr);
 		usleep(10000);
@@ -1602,19 +1614,18 @@ apfifo_dma_read_test()
 	return 0;
 }
 
-int
-apfifo_dma_write_test()
+int apfifo_dma_write_test()
 {
 	log(INFO, "Starting FDC DMA test!\n");
 	dump_apfifo_channel(INFO, APFIFO0_FD);
-	volatile uint32_t *sra = (uint32_t*)0xbed60000;
+	volatile uint32_t *sra = (uint32_t *)0xbed60000;
 	// volatile uint8_t *srb = (uint8_t*)0xbed60004;
-	volatile uint32_t *dor = (uint32_t*)0xbed60008;
+	volatile uint32_t *dor = (uint32_t *)0xbed60008;
 	// volatile uint8_t *tdr = (uint8_t*)0xbed6000c;
-	volatile uint32_t *msr_dsr = (uint32_t*)0xbed60010;
-	volatile uint32_t *fdc_fifo = (uint32_t*)0xbed60014;
-	volatile uint32_t *dir_ccr = (uint32_t*)0xbed6001c;
-	volatile uint32_t *fdc_aux1 = (uint32_t*)0xbed60204;
+	volatile uint32_t *msr_dsr = (uint32_t *)0xbed60010;
+	volatile uint32_t *fdc_fifo = (uint32_t *)0xbed60014;
+	volatile uint32_t *dir_ccr = (uint32_t *)0xbed6001c;
+	volatile uint32_t *fdc_aux1 = (uint32_t *)0xbed60204;
 
 	log(INFO, "\nreset FDC\n");
 	// [:fdc] dor = 00
@@ -1638,15 +1649,15 @@ apfifo_dma_write_test()
 	// *msr_dsr = 0x40;
 	// log(INFO, "msr = 0x%x\n", *msr_dsr);
 
-	log(INFO, "Read INTST0, expect unset? 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset? 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 	*fdc_aux1 = 0x1;
 	log(INFO, "Set FDC AUX to 0x1\n");
-	log(INFO, "Read INTST0, expect unset?: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset?: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	*dor = 0x1C;
 	log(INFO, "dor = 0x%x\n", *dor);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-	
+
 	// internal stuff?
 	// [:fdc] polled 0 : 0 -> 1
 	// [:fdc] polled 1 : 0 -> 1
@@ -1654,21 +1665,13 @@ apfifo_dma_write_test()
 	// [:fdc] polled 3 : 0 -> 1
 
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
-	log(INFO, "Read INTST0, expect set: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect set: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "\nExecute command sense interrupt status\n");
 	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
-	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
-	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-	log(INFO, "res2 = 0x%x\n", *fdc_fifo);
-	log(INFO, "MSR = 0x%x\n", *msr_dsr);
-
-
-	log(INFO, "\nExecute command sense interrupt status\n");
-	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
 	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
@@ -1677,7 +1680,9 @@ apfifo_dma_write_test()
 
 	log(INFO, "\nExecute command sense interrupt status\n");
 	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
 	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
@@ -1686,7 +1691,20 @@ apfifo_dma_write_test()
 
 	log(INFO, "\nExecute command sense interrupt status\n");
 	*fdc_fifo = 0x08;
-	while ((*msr_dsr & 0x80) != 0x80) {}
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
+	log(INFO, "MSR = 0x%x\n", *msr_dsr);
+	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
+	log(INFO, "MSR = 0x%x\n", *msr_dsr);
+	log(INFO, "res2 = 0x%x\n", *fdc_fifo);
+	log(INFO, "MSR = 0x%x\n", *msr_dsr);
+
+	log(INFO, "\nExecute command sense interrupt status\n");
+	*fdc_fifo = 0x08;
+	while ((*msr_dsr & 0x80) != 0x80)
+	{
+	}
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
 	log(INFO, "res1 = 0x%x\n", *fdc_fifo);
 	log(INFO, "MSR = 0x%x\n", *msr_dsr);
@@ -1717,7 +1735,7 @@ apfifo_dma_write_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0xdf)
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x10)
 	// [:fdc] command specify df 10: step_rate=3 ms, head_unload=240 ms, head_load=16 ms, non_dma=false
-	log(INFO, "\nRead INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "\nRead INTST0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "Execute perpindicular command\n");
 	*fdc_fifo = 0x12;
@@ -1730,10 +1748,13 @@ apfifo_dma_write_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x05)
 	// [:fdc] command perpendicular
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
-	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "Wait for msr");
-	while ((*msr_dsr & 0xff) != 0x80) { log(INFO, "."); }
+	while ((*msr_dsr & 0xff) != 0x80)
+	{
+		log(INFO, ".");
+	}
 
 	log(INFO, "\nExecute configure 00 08 00 command\n");
 	*fdc_fifo = 0x13;
@@ -1754,7 +1775,7 @@ apfifo_dma_write_test()
 	// [:fdc] ':cpu' (9FC113DC): fifo_w(0x00)
 	// [:fdc] command configure 00 08 00
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
-	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTST0));
+	log(INFO, "Read INTST0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(INFO, "Execute recalibrate 0 command\n");
 	*fdc_fifo = 0x07;
@@ -1773,7 +1794,7 @@ apfifo_dma_write_test()
 	log(INFO, "Read sra: 0x%x\n", *sra);
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
 	// log(INFO, "Wait for interrupt\n");
-	//while (*((uint32_t*)NEWS5000_INTST0) == 0) { log(INFO, "int = 0x%x  sra = 0x%x msr = 0x%x", *((uint32_t*)NEWS5000_INTST0), *sra, *msr_dsr); }
+	// while (*((uint32_t*)NEWS5000_INTST0) == 0) { log(INFO, "int = 0x%x  sra = 0x%x msr = 0x%x", *((uint32_t*)NEWS5000_INTST0), *sra, *msr_dsr); }
 	// [:] intst_r: INTST0 = 0x0
 	// ...
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 1
@@ -1785,9 +1806,9 @@ apfifo_dma_write_test()
 	// [:] generic_irq_w: INTST0 IRQ 16 set to 0
 	// [:fdc] command sense interrupt status (fid=0 20 00) (':cpu' (9FC11760))
 
-	//log(INFO, "Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
-	// [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
+	// log(INFO, "Read results 0x%x 0x%x (should be 0x20 0x00)\n", *fdc_fifo, *fdc_fifo);
+	//  [:fdc] ':cpu' (9FC117B0): fifo_r = 0x20
+	//  [:fdc] ':cpu' (9FC117B0): fifo_r = 0x00
 
 	/*
 	log(INFO, "Execute recalibrate 0 command\n");
@@ -1809,22 +1830,22 @@ apfifo_dma_write_test()
 	APFIFO0_FD->size = 0x7fff;
 	APFIFO0_FD->address = 0x0;
 	APFIFO0_FD->intctrl = 0x2; // todo: check if enabling this in other tests changes anything
-	APFIFO0_FD->dma_pointer  = 0x0;
-	APFIFO0_FD->register_pointer  = 0x0;
+	APFIFO0_FD->dma_pointer = 0x0;
+	APFIFO0_FD->register_pointer = 0x0;
 	// APFIFO0_FD->dma_mode  = 0xa; // prep for transfer out
 	APFIFO0_FD->unknown2 = 0x10000; // watermark?
 
-	log(INFO, "Read INTEN0, expect unset: 0x%x\n", *((uint32_t*)NEWS5000_INTEN0));
-	*((uint32_t*)NEWS5000_INTEN0) = 0x0;
-	
+	log(INFO, "Read INTEN0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTEN0));
+	*((uint32_t *)NEWS5000_INTEN0) = 0x0;
+
 	log(INFO, "Prepping data...\n");
-	//APFIFO0_BUF_32(0) = 0x12345678;
-	//APFIFO0_BUF_32(1) = 0xabcdef12;
+	// APFIFO0_BUF_32(0) = 0x12345678;
+	// APFIFO0_BUF_32(1) = 0xabcdef12;
 	APFIFO0_FD->dma_mode = 0x2; // set DMA direction TODO: check if this changes anything in the status or how the dma/reg pointers increment
 	APFIFO0_FD->data = 0x12345678;
 	APFIFO0_FD->data = 0xabcdef12; // todo: see if it always repeats the last byte - does enabling interrupts change how this works?
 
-	APFIFO0_FD->intctrl = 0x0; // MROM disables FIFO interrupts when formatting - is this correct? Maybe it hooks off of the FDC interrupt? TODO: see if interrupts can be enabled here
+	APFIFO0_FD->intctrl = 0x0;	// MROM disables FIFO interrupts when formatting - is this correct? Maybe it hooks off of the FDC interrupt? TODO: see if interrupts can be enabled here
 	APFIFO0_FD->dma_mode = 0x3; // enable DMA mode
 	// [:apfifo0] FIFO CH2: Setting fifo_size to 0x7fff
 	// [:apfifo0] FIFO CH2: Setting address to 0x0
@@ -1887,7 +1908,8 @@ apfifo_dma_write_test()
 	log(INFO, "Wait for interrupt...\n");
 	log(INFO, "Read sra: 0x%x\n", *sra);
 	log(INFO, "Read msr: 0x%x\n", *msr_dsr);
-	while (*((uint32_t*)NEWS5000_INTST0) == 0) { 
+	while (*((uint32_t *)NEWS5000_INTST0) == 0)
+	{
 		log(INFO, "Read sra: 0x%x ", *sra);
 		log(INFO, "Read msr: 0x%x\n", *msr_dsr);
 		usleep(10000);
@@ -1907,8 +1929,7 @@ apfifo_dma_write_test()
 }
 #pragma endregion FIFO DMA tests
 
-void
-apfifo_test()
+void apfifo_test()
 {
 	log(INFO, "Starting CXD8442Q WSC-FIFOQ functional tests...\n");
 	volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
@@ -1916,7 +1937,7 @@ apfifo_test()
 	dump_apfifo_channel(TRACE, APFIFO0_FD);
 
 	log(TRACE, "start time = 0x%x\n", get_ustime());
-	
+
 	// Common configuration for first round of tests
 	init_channel(APFIFO0_FD, 0x0, 0x1fff);
 	init_channel(APFIFO0_CH0, 0x2000, 0x1fff);
@@ -1945,11 +1966,11 @@ apfifo_test()
 	// FIFO channel control tests
 	LOGRESULT(apfifo_reconfigure_test(APFIFO0_FD));
 
-	// TODO: DMA testing	
+	// TODO: DMA testing
 	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
 	// LOGRESULT(apfifo_dma_read_test());
 	// LOGRESULT(apfifo_dma_write_test());
-	
+
 	log(INFO, "1..%d\nTests complete!\n", tap);
 	log(TRACE, "end time = 0x%x\n\n", get_ustime());
 
