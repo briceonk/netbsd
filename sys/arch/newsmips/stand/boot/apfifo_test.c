@@ -2135,7 +2135,7 @@ int apfifo_dma_write_test()
 void apfifo_test()
 {
 	log(INFO, "Starting CXD8442Q WSC-FIFOQ functional tests...\n");
-	// volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
+	volatile uint8_t *byte_data_accessor = (uint8_t *)&APFIFO0_FD->data;
 
 	clear_fifo_ram();
 	dump_apfifo_channel(TRACE, APFIFO0_FD);
@@ -2149,20 +2149,20 @@ void apfifo_test()
 	init_channel(APFIFO0_CH3, 0x6000, 0x1fff);
 
 	// Basic read tests
-	// LOGRESULT(apfifo_byte_access_test(APFIFO0_FD, byte_data_accessor));
-	// LOGRESULT(apfifo_halfword_access_test(APFIFO0_FD, (volatile uint16_t *)&APFIFO0_FD->data));
-	// LOGRESULT(apfifo_word_access_test(APFIFO0_FD));
+	LOGRESULT(apfifo_byte_access_test(APFIFO0_FD, byte_data_accessor));
+	LOGRESULT(apfifo_halfword_access_test(APFIFO0_FD, (volatile uint16_t *)&APFIFO0_FD->data));
+	LOGRESULT(apfifo_word_access_test(APFIFO0_FD));
 
 	// Edge-case-y read tests
-	// LOGRESULT(apfifo_ooo_access_test(APFIFO0_FD, byte_data_accessor));
-	// LOGRESULT(apfifo_partial_word_test(APFIFO0_FD, byte_data_accessor));
-	// LOGRESULT(apfifo_cnt_cptr_test(APFIFO0_FD, APFIFO0_FD->size));
-	// LOGRESULT(apfifo_misaligned_read_test(APFIFO0_FD));
+	LOGRESULT(apfifo_ooo_access_test(APFIFO0_FD, byte_data_accessor));
+	LOGRESULT(apfifo_partial_word_test(APFIFO0_FD, byte_data_accessor));
+	LOGRESULT(apfifo_cnt_cptr_test(APFIFO0_FD, APFIFO0_FD->size));
+	LOGRESULT(apfifo_misaligned_read_test(APFIFO0_FD));
 
 	// Basic write tests
-	// LOGRESULT(apfifo_byte_write_test(APFIFO0_FD, byte_data_accessor, APFIFO0_FD->size));
-	// LOGRESULT(apfifo_halfword_write_test(APFIFO0_FD, (volatile uint16_t *)&APFIFO0_FD->data, APFIFO0_FD->size));
-	// LOGRESULT(apfifo_word_write_test(APFIFO0_FD, APFIFO0_FD->size));
+	LOGRESULT(apfifo_byte_write_test(APFIFO0_FD, byte_data_accessor, APFIFO0_FD->size));
+	LOGRESULT(apfifo_halfword_write_test(APFIFO0_FD, (volatile uint16_t *)&APFIFO0_FD->data, APFIFO0_FD->size));
+	LOGRESULT(apfifo_word_write_test(APFIFO0_FD, APFIFO0_FD->size));
 
 	LOGRESULT(apfifo_delay_interrupt_test(APFIFO0_FD));
 	LOGRESULT(apfifo_delay_autoreset_test(APFIFO0_FD));
@@ -2171,7 +2171,7 @@ void apfifo_test()
 	// TODO: multichannel delay interrupt test
 
 	// FIFO channel control tests
-	// LOGRESULT(apfifo_reconfigure_test(APFIFO0_FD));
+	LOGRESULT(apfifo_reconfigure_test(APFIFO0_FD));
 
 	// TODO: count when doing a DMA transfer out? See if count changes to cpu - dma when DMA dir is set?
 	LOGRESULT(apfifo_dma_read_test());
