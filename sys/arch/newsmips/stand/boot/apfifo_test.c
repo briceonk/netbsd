@@ -43,7 +43,7 @@ void dump_apfifo_channel(int log_level, struct fifo_channel *fifo_ch)
 	log(log_level, "fifo_drqc = 0x%x\n", fifo_ch->unknown1);
 	log(log_level, "fifo_ictl = 0x%x\n", fifo_ch->intctrl);
 	log(log_level, "fifo_ista = 0x%x\n", fifo_ch->intstat);
-	log(log_level, "fifo_wmrk = 0x%x\n", fifo_ch->unknown2);
+	log(log_level, "fifo_wmrk = 0x%x\n", fifo_ch->watermark);
 	log(log_level, "fifo_dcnt = 0x%x\n", fifo_ch->time_delay_count);
 	log(log_level, "fifo_dptr = 0x%x\n", fifo_ch->dma_pointer);
 	log(log_level, "fifo_cptr = 0x%x\n", fifo_ch->register_pointer);
@@ -87,7 +87,7 @@ void reset_channel(struct fifo_channel *fifo_ch)
 	fifo_ch->unknown0 = 0x55; // ?? what is this
 	fifo_ch->unknown1 = 0x0; // ?? what is this
 	fifo_ch->intctrl = 0x0;
-	fifo_ch->unknown2 = 0x0; // threshold?
+	fifo_ch->watermark = 0x0; // threshold? 0x10000 seems to have some special meaning but I don't know what
 	fifo_ch->time_delay_count = 0x0;
 	fifo_ch->dma_pointer = 0x0;
 	fifo_ch->register_pointer = 0x0;
@@ -105,6 +105,31 @@ void usleep(uint32_t microseconds)
 	while (get_ustime() < start + microseconds)
 	{
 	}
+}
+
+int assert_intstat(struct fifo_channel *fifo_ch, uint32_t expected_value, char* fail_msg)
+{
+	int ok = 1;
+	// The upper section of intstat has the current delay count, so that is masked off before comparison
+	if ((fifo_ch->intstat & 0xff) != expected_value)
+	{
+		log(ERROR, "  Unexpected fifo intstat value 0x%x! Failure: %s\n", fifo_ch->intstat, fail_msg);
+		dump_apfifo_channel(ERROR, fifo_ch);
+		ok = 0;
+	}
+	return ok;
+}
+
+int assert_intst0(uint32_t expected_value, char* fail_msg)
+{
+	int ok = 1;
+	uint32_t intst0 = *((uint32_t *)NEWS5000_INTST0);
+	if (intst0 != expected_value)
+	{
+		log(ERROR, "  Unexpected INTST0 value 0x%x! Failure: %s\n", intst0, fail_msg);
+		ok = 0;
+	}
+	return ok;
 }
 #pragma endregion Utility functions
 
@@ -1051,6 +1076,7 @@ int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 	}
 
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	log(INFO, "Platform INTST0 for time del = 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 	if (fifo_ch->intstat != 0x1c)
 	{
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
@@ -1124,11 +1150,12 @@ int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
-	else if (*((uint32_t *)NEWS5000_INTST0) == 0)
+	else if (*((uint32_t *)NEWS5000_INTST0) == 0) // TODO: log what this actually is and check if different channels give different bits
 	{
 		log(ERROR, "  Interrupt error! INTST0 was not set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 		ok = 0;
 	}
+	log(ERROR, "  With count intr set, INTST0 = 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 
 	log(TRACE, " Check that interrupting count by reading out data allows count to continue\n");
 	fifo_ch->register_pointer = fifo_ch->dma_pointer;
@@ -1240,78 +1267,66 @@ int apfifo_delay_interrupt_test(struct fifo_channel *fifo_ch)
 		log(ERROR, " Average us per tick != 100! Average = %u\n", average);
 	}
 
+	fifo_ch->register_pointer = fifo_ch->dma_pointer;
 	return ok;
 }
 
+// TODO: the following function doesn't work - what is retrigger mode if this isn't it?
 int apfifo_delay_autoreset_test(struct fifo_channel *fifo_ch)
 {
-	int i = 0;
 	int ok = 1;
 
 	// Enable autoreset, which should allow the count to activate multiple times.
 	fifo_ch->intctrl = 0x14;
+	fifo_ch->time_delay_count = 0xfff;
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	ok &= assert_intstat(fifo_ch, 0x10, "Time delay interrupt was not masked when starting the counter!");
+	ok &= assert_intst0(0, "Time delay interrupt was not masked when starting the counter!");
 
-	// Time delay count should only apply once - it should instantly trigger
+	// Check that after ~half of the time has elapsed, the interrupt has not fired yet 
+	usleep(200000);
+	ok &= assert_intstat(fifo_ch, 0x10, "Time delay interrupt was not masked midway through the test!");
+	ok &= assert_intst0(0, "Time delay interrupt was not masked midway through the test!");
+
+	// Push more data, since autoreset is enabled it should start over
+	log(INFO, "Count before data push = 0x%x\n", fifo_ch->intstat);
+	fifo_ch->data = 0x99;
+	log(INFO, "Count after data push = 0x%x\n", fifo_ch->intstat);
+
+	// Wait the rest of the time and ensure that interrupt is now asserted
+	usleep(300000);
+	ok &= assert_intstat(fifo_ch, 0x1c, "Time delay interrupt was not asserted after delay!");
+	ok &= assert_intst0(0x8, "Time delay interrupt was not asserted after delay!"); // TODO: This assumes APFIFO0
+
 	fifo_ch->data;
 	fifo_ch->data;
-	if ((fifo_ch->intstat & 0xff) != 0x0)
-	{
-		log(ERROR, "  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
-		dump_apfifo_channel(INFO, fifo_ch);
-		ok = 0;
-	}
-	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
-	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
-		ok = 0;
-	}
-
 	fifo_ch->data;
-	for (i = 0; i < 100000; ++i)
-	{
-		if (i % 1000 == 0)
-			log(TRACE, ".");
-	}
-	log(TRACE, "\n");
-	fifo_ch->register_pointer = fifo_ch->dma_pointer;
-	if ((fifo_ch->intstat & 0xff) != 0x0)
-	{
-		log(ERROR, "  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
-		dump_apfifo_channel(ERROR, fifo_ch);
-		ok = 0;
-	}
-	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
-	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
-		ok = 0;
-	}
+	ok &= assert_intstat(fifo_ch, 0x0, "Time delay interrupt was not reset after pointer adjustment!");
+	ok &= assert_intst0(0, "Time delay interrupt was not reset after pointer adjustment!");
 
-	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
-	if (fifo_ch->intstat != 0x1c)
-	{
-		log(ERROR, "  Interrupt error! Time delay interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
-		ok = 0;
-	}
-	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
-	{
-		log(ERROR, "  Interrupt error! INTST0 was set! 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
-		ok = 0;
-	}
+	// // Check that timer automatically resets without additional configuration
+	// fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
+	// ok &= assert_intstat(fifo_ch, 0x10, "Time delay count was not autoreset!");
+	// ok &= assert_intst0(0, "Time delay interrupt was not autoreset!");
+	// usleep(500000);
+	// ok &= assert_intstat(fifo_ch, 0x1c, "Time delay interrupt was not asserted after delay!");
+	// ok &= assert_intst0(0x8, "Time delay interrupt was not asserted after delay!"); // TODO: This assumes APFIFO0
+	// fifo_ch->register_pointer = fifo_ch->dma_pointer;
 
 	return ok;
 }
 
-int apfifo_threshold_interrupt_test(struct fifo_channel *fifo_ch)
+int apfifo_threshold_interrupt_test(struct fifo_channel *fifo_ch) // TODO: try this with other DMA direction to confirm behavior, also check if </> or <=/>=
 {
 	int ok = 1;
 
 	// Enable threshold interrupt with smallest threshold
 	fifo_ch->time_delay_count = 0x0;
-	fifo_ch->unknown2 = 0x1;
+	fifo_ch->watermark = 0x1;
 	fifo_ch->intctrl = 0x3;
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
 
+	printf("Platform INTST0 for threshold interrupt = 0x%x\n", *((uint32_t *)NEWS5000_INTST0));
 	if ((fifo_ch->intstat & 0xff) != 0x0)
 	{
 		log(ERROR, "  Interrupt error! Threshold interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
@@ -1325,7 +1340,8 @@ int apfifo_threshold_interrupt_test(struct fifo_channel *fifo_ch)
 	}
 
 	// Setting threshold higher than count should stop the interrupt
-	fifo_ch->unknown2 = 0x3;
+	log(ERROR, "  Count = 0x%x\n", fifo_ch->count);
+	fifo_ch->watermark = 0x3;
 	if ((fifo_ch->intstat & 0xff) != 0x0)
 	{
 		log(ERROR, "  Interrupt error! Threshold interrupt was not masked! INTST = 0x%x\n", fifo_ch->intstat);
@@ -1373,11 +1389,11 @@ int apfifo_intclr_test(struct fifo_channel *fifo_ch)
 {
 	int ok = 1;
 
-	fifo_ch->intctrl = 0x0;
+	fifo_ch->intctrl = 0x3;
 	fifo_ch->register_pointer = fifo_ch->dma_pointer - 8;
-	if (fifo_ch->intstat != 0x10)
+	if (fifo_ch->intstat != 0x13)
 	{
-		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
+		log(ERROR, "  Interrupt error! Interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
 	else if (*((uint32_t *)NEWS5000_INTST0) != 0) // TODO: change to check exact interrupt
@@ -1389,7 +1405,7 @@ int apfifo_intclr_test(struct fifo_channel *fifo_ch)
 	fifo_ch->intclr = 0x1;
 	if (fifo_ch->intstat != 0x0)
 	{
-		log(ERROR, "  Interrupt error! Time delay interrupt was not set! INTST = 0x%x\n", fifo_ch->intstat);
+		log(ERROR, "  Interrupt error! Time delay interrupt was set! INTST = 0x%x\n", fifo_ch->intstat);
 		ok = 0;
 	}
 	else if (*((uint32_t *)NEWS5000_INTST0) != 0)
@@ -1733,7 +1749,7 @@ int apfifo_dma_read_test()
 	APFIFO0_FD->dma_pointer = 0x0;
 	APFIFO0_FD->register_pointer = 0x0;
 	APFIFO0_FD->dma_mode = 0x0;
-	APFIFO0_FD->unknown2 = 0x10; // watermark?
+	APFIFO0_FD->watermark = 0x10;
 	APFIFO0_FD->dma_mode = 0x1;		// enable DMA mode
 	// [:apfifo0] FIFO CH2: Setting fifo_size to 0x7fff
 	// [:apfifo0] FIFO CH2: Setting address to 0x0
@@ -1803,7 +1819,7 @@ int apfifo_dma_read_test()
 		usleep(10000);
 	}
 
-	log(INFO, "FDC command done! Reading out data...\n");
+	log(INFO, "FDC command done! Reading out data...\n"); // TODO: check first few bytes in FIFO RAM as well
 	log(INFO, "Count = 0x%x intstat = 0x%x\n", APFIFO0_FD->count, APFIFO0_FD->intstat);
 	while (APFIFO0_FD->count)
 	{
@@ -2037,7 +2053,7 @@ int apfifo_dma_write_test()
 	APFIFO0_FD->dma_pointer = 0x0;
 	APFIFO0_FD->register_pointer = 0x0;
 	APFIFO0_FD->dma_mode  = 0x2; // prep for transfer out
-	APFIFO0_FD->unknown2 = 0x10000; // watermark?
+	APFIFO0_FD->watermark = 0x10000; // watermark?
 
 	log(INFO, "Read INTEN0, expect unset: 0x%x\n", *((uint32_t *)NEWS5000_INTEN0));
 	*((uint32_t *)NEWS5000_INTEN0) = 0x0;
@@ -2132,6 +2148,8 @@ int apfifo_dma_write_test()
 }
 #pragma endregion FIFO DMA tests
 
+// TODO: write test that asserts platform INTST, then disable INTST, then clear the interrupt condition, see if that latches intst still
+
 void apfifo_test()
 {
 	log(INFO, "Starting CXD8442Q WSC-FIFOQ functional tests...\n");
@@ -2147,6 +2165,11 @@ void apfifo_test()
 	init_channel(APFIFO0_CH0, 0x2000, 0x1fff);
 	init_channel(APFIFO0_CH1, 0x4000, 0x1fff);
 	init_channel(APFIFO0_CH3, 0x6000, 0x1fff);
+
+	init_channel(APFIFO1_CH2, 0x0, 0x1fff);
+	init_channel(APFIFO1_CH0, 0x2000, 0x1fff);
+	init_channel(APFIFO1_CH3, 0x4000, 0x1fff);
+	init_channel(APFIFO1_CH1, 0x6000, 0x1fff);
 
 	// Basic read tests
 	LOGRESULT(apfifo_byte_access_test(APFIFO0_FD, byte_data_accessor));
@@ -2164,11 +2187,25 @@ void apfifo_test()
 	LOGRESULT(apfifo_halfword_write_test(APFIFO0_FD, (volatile uint16_t *)&APFIFO0_FD->data, APFIFO0_FD->size));
 	LOGRESULT(apfifo_word_write_test(APFIFO0_FD, APFIFO0_FD->size));
 
+	// interrupt tests
 	LOGRESULT(apfifo_delay_interrupt_test(APFIFO0_FD));
+	LOGRESULT(apfifo_delay_interrupt_test(APFIFO1_CH0));
+
 	LOGRESULT(apfifo_delay_autoreset_test(APFIFO0_FD));
+
 	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO0_FD));
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO0_CH0));
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO0_CH1));
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO0_CH3));
+
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO1_CH2));
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO1_CH0));
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO1_CH1));
+	LOGRESULT(apfifo_threshold_interrupt_test(APFIFO1_CH3));
+	
 	LOGRESULT(apfifo_intclr_test(APFIFO0_FD));
 	// TODO: multichannel delay interrupt test
+	// TODO: check that mask bits work
 
 	// FIFO channel control tests
 	LOGRESULT(apfifo_reconfigure_test(APFIFO0_FD));

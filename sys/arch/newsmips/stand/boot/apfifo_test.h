@@ -9,6 +9,8 @@ void log_intstat(int log_level);
 void intclr(void);
 void clear_fifo_ram(void);
 void reset_channel(struct fifo_channel *fifo_ch);
+int assert_intstat(struct fifo_channel *fifo_ch, uint32_t expected_value, char* fail_msg);
+int assert_intst0(uint32_t expected_value, char* fail_msg);
 
 // CPU read/register count tests
 void apfifo_prep_read_test(struct fifo_channel *fifo_ch);
